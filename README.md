@@ -21,7 +21,7 @@ Target accuracy: **±5-10%** for COP/SCOP with native ESPHome power sensor, **±
 
 1. In HACS, add this repository as a Custom Repository (category: Integration):
    ```
-   https://github.com/sppbfilatov/haier-monitor-ha
+   https://github.com/Ot4eVash/haier-monitor-ha
    ```
 2. Install "Haier Multi-Split Monitor" from HACS.
 3. Restart Home Assistant.

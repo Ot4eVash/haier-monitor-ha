@@ -6,4 +6,4 @@ Calculate electric power, COP/EER/SEER/SCOP, per-room heat distribution, and com
 
 Tables and physics verified against first-party Service Manual V1 (2021) and peer-reviewed literature.
 
-[Full README](https://github.com/sppbfilatov/haier-monitor-ha/blob/main/README.md)
+[Full README](https://github.com/Ot4eVash/haier-monitor-ha/blob/main/README.md)
