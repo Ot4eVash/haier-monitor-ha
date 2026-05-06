@@ -1,0 +1,14 @@
+{
+  "domain": "haier_monitor",
+  "name": "Haier Multi-Split Monitor",
+  "version": "1.0.0",
+  "documentation": "https://github.com/sppbfilatov/haier-monitor-ha",
+  "issue_tracker": "https://github.com/sppbfilatov/haier-monitor-ha/issues",
+  "codeowners": ["@sppbfilatov"],
+  "config_flow": true,
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "requirements": [],
+  "dependencies": [],
+  "after_dependencies": ["esphome"]
+}

@@ -1,0 +1,297 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Haier Multi-Split Monitor",
+        "description": "Настройка мониторинга мульти-сплит системы Haier 2U50S2SM1FA-3. Сначала добавляешь внутренние блоки по одному, затем привязываешь общие сенсоры наружного блока.",
+        "data": {
+          "name": "Название интеграции"
+        }
+      },
+      "room_1": {
+        "title": "Первый внутренний блок",
+        "description": "Настрой первый внутренний блок (по умолчанию «Кухня» — можно изменить).",
+        "data": {
+          "name": "Имя комнаты (используется в именах сенсоров)",
+          "climate_entity": "Climate-entity блока",
+          "indoor_fan_status": "Состояние вентилятора блока (binary)",
+          "eev_opening": "Сенсор открытия EEV",
+          "room_temperature": "Температура в комнате (необязательно, желательно)",
+          "room_humidity": "Влажность в комнате (для расчёта sensible/latent)",
+          "indoor_coil_temperature": "Темп. внутреннего испарителя (native ESPHome)",
+          "room_capacity": "Паспортная мощность блока (Вт)"
+        }
+      },
+      "room_2": {
+        "title": "Второй внутренний блок",
+        "description": "Настрой второй внутренний блок (по умолчанию «Спальня» — можно изменить).",
+        "data": {
+          "name": "Имя комнаты (используется в именах сенсоров)",
+          "climate_entity": "Climate-entity блока",
+          "indoor_fan_status": "Состояние вентилятора блока (binary)",
+          "eev_opening": "Сенсор открытия EEV",
+          "room_temperature": "Температура в комнате (необязательно, желательно)",
+          "room_humidity": "Влажность в комнате (для расчёта sensible/latent)",
+          "indoor_coil_temperature": "Темп. внутреннего испарителя (native ESPHome)",
+          "room_capacity": "Паспортная мощность блока (Вт)"
+        }
+      },
+      "outdoor": {
+        "title": "Сенсоры наружного блока",
+        "description": "Каждый внутренний блок отдаёт свою копию данных наружника — выбери все. Интеграция усреднит доступные значения с fallback. Native sensors (power, defrost) необязательны, но повышают точность.",
+        "data": {
+          "outdoor_temperature": "Уличная температура (источники)",
+          "outdoor_coil_temperature": "Темп. наружного теплообменника",
+          "outdoor_defrost_temperature": "Темп. датчика оттайки (опц.)",
+          "outdoor_in_air_temperature": "Темп. воздуха на входе наружника",
+          "outdoor_out_air_temperature": "Темп. воздуха на выходе наружника",
+          "compressor_frequency": "Частота компрессора",
+          "compressor_status": "Статус компрессора (binary)",
+          "native_power": "Native power от ESPHome (опц.)",
+          "native_compressor_current": "Ток компрессора от ESPHome (опц.)",
+          "native_defrost_status": "Native defrost status (опц.)",
+          "native_outdoor_fan_status": "Native статус наружного вентилятора (опц.)"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Поддерживается только одна установка Haier Monitor."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Перенастройка Haier Monitor",
+        "menu_options": {
+          "outdoor_relink": "Перепривязать сенсоры наружника",
+          "rooms_relink": "Перепривязать внутренние блоки"
+        }
+      },
+      "outdoor_relink": {
+        "title": "Привязка сенсоров наружного блока",
+        "data": {
+          "outdoor_temperature": "Уличная температура",
+          "outdoor_coil_temperature": "Темп. наружного теплообменника",
+          "outdoor_defrost_temperature": "Темп. датчика оттайки",
+          "outdoor_in_air_temperature": "Темп. воздуха на входе",
+          "outdoor_out_air_temperature": "Темп. воздуха на выходе",
+          "compressor_frequency": "Частота компрессора",
+          "compressor_status": "Статус компрессора",
+          "native_power": "Native power",
+          "native_compressor_current": "Ток компрессора",
+          "native_defrost_status": "Native defrost status",
+          "native_outdoor_fan_status": "Native outdoor fan status"
+        }
+      }
+    },
+    "abort": {
+      "rooms_relink_not_supported": "Чтобы перепривязать внутренние блоки, удали и заново добавь интеграцию. (Калибровка через Number entities — туда заходить не нужно.)"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "what_doing": {
+        "name": "Что делает",
+        "state": {
+          "off": "Выключен",
+          "starting": "Прогрев",
+          "defrosting": "Оттайка",
+          "fan_only": "Вентилирует",
+          "auto": "Авторежим",
+          "idle": "Простой",
+          "cooling": "Охлаждает",
+          "cooling_all": "Охлаждает обе комнаты",
+          "heating": "Греет",
+          "heating_all": "Греет обе комнаты",
+          "drying": "Осушает",
+          "drying_all": "Осушает обе комнаты"
+        }
+      },
+      "health": {
+        "name": "Здоровье",
+        "state": {
+          "excellent": "Отличное",
+          "good": "Хорошее",
+          "average": "Среднее",
+          "problem": "Проблема",
+          "starting": "Прогрев",
+          "defrosting": "Оттайка",
+          "idle": "Простой",
+          "unknown": "Не определено"
+        }
+      },
+      "efficiency_label": {
+        "name": "Эффективность",
+        "state": {
+          "excellent": "Отличная",
+          "good": "Хорошая",
+          "average": "Средняя",
+          "low": "Низкая",
+          "starting": "Прогрев",
+          "defrosting": "Оттайка",
+          "idle": "Простой",
+          "unknown": "Не определена"
+        }
+      },
+      "sanity_label": {
+        "name": "Достоверность модели",
+        "state": {
+          "normal": "Норма",
+          "slightly_low": "Слегка занижена",
+          "significantly_low": "Сильно занижена",
+          "slightly_high": "Слегка завышена",
+          "significantly_high": "Сильно завышена",
+          "unknown": "Не определена"
+        }
+      },
+      "seer_grade": {"name": "Класс охлаждения (SEER)"},
+      "scop_grade": {"name": "Класс нагрева (SCOP)"},
+      "outdoor_coil_status": {
+        "name": "Состояние наружника",
+        "state": {
+          "clean": "Чистый",
+          "possibly_dirty": "Возможно загрязнён",
+          "needs_cleaning": "Нужна чистка",
+          "unknown": "Не определено"
+        }
+      },
+      "refrigerant_status": {
+        "name": "Состояние заправки",
+        "state": {
+          "normal": "Норма",
+          "leak_suspected": "Подозрение на утечку",
+          "unknown": "Не определено"
+        }
+      },
+      "defrost_status_label": {
+        "name": "Состояние оттаек",
+        "state": {
+          "normal": "Норма",
+          "frequent": "Частые оттайки",
+          "long": "Длинные оттайки",
+          "unknown": "Не определено"
+        }
+      },
+      "filter_status_room": {
+        "name": "Фильтр {room}",
+        "state": {
+          "clean": "Чистый",
+          "possibly_dirty": "Возможно грязный",
+          "needs_cleaning": "Нужна чистка",
+          "unknown": "Не определено"
+        }
+      },
+      "recommendation_severity": {
+        "name": "Серьёзность рекомендации",
+        "state": {
+          "ok": "Всё ОК",
+          "info": "Совет",
+          "warn": "Предупреждение",
+          "fault": "Проблема"
+        }
+      },
+      "recommendation_top": {"name": "Рекомендация"},
+      "outdoor_temperature": {"name": "Уличная температура"},
+      "outdoor_coil_temperature": {"name": "Темп. наружного теплообменника"},
+      "outdoor_defrost_temperature": {"name": "Темп. датчика оттайки"},
+      "outdoor_in_air_temperature": {"name": "Темп. воздуха на входе наружника"},
+      "outdoor_out_air_temperature": {"name": "Темп. воздуха на выходе наружника"},
+      "outdoor_air_dt": {"name": "ΔT воздуха через наружник"},
+      "compressor_frequency": {"name": "Частота компрессора"},
+      "compressor_current": {"name": "Ток компрессора"},
+      "compressor_uptime": {"name": "Uptime компрессора"},
+      "compressor_starts_per_hour": {"name": "Старты компрессора (1ч)"},
+      "comp_f_max": {"name": "Макс. частота компрессора"},
+      "comp_f_min": {"name": "Мин. частота компрессора"},
+      "outdoor_fan_rpm": {"name": "Обороты наружного вентилятора"},
+      "outdoor_airflow": {"name": "Расход воздуха наружника"},
+      "p_elec_max": {"name": "P_max (паспорт)"},
+      "q_max": {"name": "Q_max (паспорт)"},
+      "eer_table": {"name": "EER (паспорт)"},
+      "p_idle": {"name": "P_idle"},
+      "p_elec_modeled": {"name": "P_elec (модель)"},
+      "p_elec": {"name": "Электрическая мощность"},
+      "q_outdoor_air": {"name": "Q_outdoor (через воздух)"},
+      "q_indoor_total": {"name": "Полная теплоотдача в дом"},
+      "q_sensible_total": {"name": "Q sensible (всего)"},
+      "q_latent_total": {"name": "Q latent (всего)"},
+      "shr": {"name": "SHR"},
+      "approach_outdoor": {"name": "Approach наружника"},
+      "eer_instant": {"name": "EER (мгновенный)"},
+      "cop_instant": {"name": "COP (мгновенный)"},
+      "eer_smoothed": {"name": "EER (5 мин среднее)"},
+      "cop_smoothed": {"name": "COP (5 мин среднее)"},
+      "eer_expected": {"name": "EER ожидаемый"},
+      "cop_expected": {"name": "COP ожидаемый"},
+      "cop_carnot": {"name": "COP × η Carnot"},
+      "eer_efficiency": {"name": "Эффективность охлаждения"},
+      "cop_efficiency": {"name": "Эффективность нагрева"},
+      "eer_efficiency_smoothed": {"name": "Эффективность охл. (5 мин)"},
+      "cop_efficiency_smoothed": {"name": "Эффективность нагр. (5 мин)"},
+      "q_sanity_ratio": {"name": "Достоверность Q"},
+      "q_sanity_smoothed": {"name": "Достоверность Q (1 час)"},
+      "e_elec_total": {"name": "Электричество (всего)"},
+      "e_elec_cool_total": {"name": "Электричество охлаждения (всего)"},
+      "e_elec_heat_total": {"name": "Электричество нагрева (всего)"},
+      "q_cool_total": {"name": "Холод произведённый (всего)"},
+      "q_heat_total": {"name": "Тепло произведённое (всего)"},
+      "e_elec_daily": {"name": "Электричество за день"},
+      "e_elec_monthly": {"name": "Электричество за месяц"},
+      "e_elec_yearly": {"name": "Электричество за год"},
+      "e_elec_cool_monthly": {"name": "Электричество (охл.) за месяц"},
+      "e_elec_heat_monthly": {"name": "Электричество (нагр.) за месяц"},
+      "q_cool_daily": {"name": "Холод за день"},
+      "q_cool_monthly": {"name": "Холод за месяц"},
+      "q_heat_daily": {"name": "Тепло за день"},
+      "q_heat_monthly": {"name": "Тепло за месяц"},
+      "seer_running": {"name": "SEER (текущий)"},
+      "scop_running": {"name": "SCOP (текущий)"},
+      "seer_pct": {"name": "SEER % паспорта"},
+      "scop_pct": {"name": "SCOP % паспорта"},
+      "cost_daily": {"name": "Стоимость за день"},
+      "cost_monthly": {"name": "Стоимость за месяц"},
+      "defrost_count_24h": {"name": "Циклов оттайки (24ч)"},
+      "outdoor_days": {"name": "Наружник — дней с промывки"},
+      "filter_days_room": {"name": "{room} — дней с чистки фильтра"},
+      "q_room": {"name": "Тепло в комнату {room}"},
+      "q_sensible_room": {"name": "{room} Q sensible"},
+      "share_room": {"name": "{room} доля"},
+      "dewpoint_room": {"name": "{room} точка росы"},
+      "approach_evap_room": {"name": "{room} approach испарителя"}
+    },
+    "binary_sensor": {
+      "compressor_running": {"name": "Компрессор работает"},
+      "outdoor_fan_running": {"name": "Наружный вентилятор"},
+      "in_defrost": {"name": "Идёт оттайка"},
+      "steady_state": {"name": "Установившийся режим"},
+      "fdd_outdoor_coil": {"name": "FDD: загрязнение наружника"},
+      "fdd_refrigerant": {"name": "FDD: подозрение на утечку"},
+      "fdd_cycling": {"name": "FDD: частое цикление"},
+      "fdd_excessive_defrost": {"name": "FDD: чрезмерные оттайки"},
+      "fan_running_room": {"name": "{room} — вентилятор работает"},
+      "condensation_room": {"name": "{room} — конденсация"},
+      "fdd_filter_room": {"name": "{room} FDD: фильтр загрязнён"}
+    },
+    "number": {
+      "eev_max": {"name": "Калибровка: EEV max"},
+      "eev_idle_cool": {"name": "Калибровка: EEV idle (cool/dry)"},
+      "eev_idle_heat": {"name": "Калибровка: EEV idle (heat)"},
+      "pipe_length": {"name": "Калибровка: суммарная длина магистрали"},
+      "eta_carnot_cool": {"name": "Калибровка: η Carnot (cool)"},
+      "eta_carnot_heat": {"name": "Калибровка: η Carnot (heat)"},
+      "idle_base": {"name": "Калибровка: idle base PCB"},
+      "idle_indoor_fan": {"name": "Калибровка: idle indoor fan (на блок)"},
+      "idle_outdoor_fan": {"name": "Калибровка: idle outdoor fan"},
+      "idle_crankcase": {"name": "Калибровка: crankcase heater (T<+5°C)"},
+      "outdoor_air_dt_offset": {"name": "Калибровка: ΔT воздуха offset"},
+      "bypass_factor": {"name": "Калибровка: bypass factor"},
+      "indoor_airflow_nominal": {"name": "Калибровка: indoor airflow nominal"},
+      "day_tariff": {"name": "Калибровка: дневной тариф"},
+      "night_tariff": {"name": "Калибровка: ночной тариф"}
+    },
+    "button": {
+      "filter_cleaned_room": {"name": "Фильтр {room} — почистил"},
+      "outdoor_cleaned": {"name": "Наружник — промыл"}
+    }
+  }
+}

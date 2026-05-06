@@ -1,0 +1,297 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Haier Multi-Split Monitor",
+        "description": "Set up monitoring for your Haier 2U50S2SM1FA-3 multi-split system. You'll be asked to add each indoor unit one by one, then link the shared outdoor sensors.",
+        "data": {
+          "name": "Integration name"
+        }
+      },
+      "room_1": {
+        "title": "First indoor unit",
+        "description": "Configure the first indoor unit (default 'Кухня' — change as you wish).",
+        "data": {
+          "name": "Room name (used in entity names)",
+          "climate_entity": "Climate entity",
+          "indoor_fan_status": "Indoor fan status (binary)",
+          "eev_opening": "EEV opening sensor",
+          "room_temperature": "Room temperature (optional, recommended)",
+          "room_humidity": "Room humidity (optional, for sensible/latent split)",
+          "indoor_coil_temperature": "Indoor coil temperature (optional, native ESPHome)",
+          "room_capacity": "Rated capacity (W)"
+        }
+      },
+      "room_2": {
+        "title": "Second indoor unit",
+        "description": "Configure the second indoor unit (default 'Спальня' — change as you wish).",
+        "data": {
+          "name": "Room name (used in entity names)",
+          "climate_entity": "Climate entity",
+          "indoor_fan_status": "Indoor fan status (binary)",
+          "eev_opening": "EEV opening sensor",
+          "room_temperature": "Room temperature (optional, recommended)",
+          "room_humidity": "Room humidity (optional, for sensible/latent split)",
+          "indoor_coil_temperature": "Indoor coil temperature (optional, native ESPHome)",
+          "room_capacity": "Rated capacity (W)"
+        }
+      },
+      "outdoor": {
+        "title": "Outdoor unit sources",
+        "description": "Each indoor unit reports the same outdoor temperature and compressor frequency through ESPHome — select all of them; the integration will average available values with fallback. Native sensors (power, defrost) are optional but improve accuracy.",
+        "data": {
+          "outdoor_temperature": "Outdoor air temperature sources",
+          "outdoor_coil_temperature": "Outdoor coil temperature sources",
+          "outdoor_defrost_temperature": "Outdoor defrost sensor sources",
+          "outdoor_in_air_temperature": "Outdoor air-in temperature sources",
+          "outdoor_out_air_temperature": "Outdoor air-out temperature sources",
+          "compressor_frequency": "Compressor frequency sources",
+          "compressor_status": "Compressor status (binary) sources",
+          "native_power": "Native power sensors (ESPHome, optional)",
+          "native_compressor_current": "Compressor current (ESPHome, optional)",
+          "native_defrost_status": "Native defrost status (binary, optional)",
+          "native_outdoor_fan_status": "Native outdoor fan status (binary, optional)"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only one Haier Monitor instance is supported."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Reconfigure Haier Monitor",
+        "menu_options": {
+          "outdoor_relink": "Re-link outdoor sensors",
+          "rooms_relink": "Re-link indoor units"
+        }
+      },
+      "outdoor_relink": {
+        "title": "Outdoor sensor links",
+        "data": {
+          "outdoor_temperature": "Outdoor air temperature sources",
+          "outdoor_coil_temperature": "Outdoor coil temperature sources",
+          "outdoor_defrost_temperature": "Outdoor defrost sensor sources",
+          "outdoor_in_air_temperature": "Outdoor air-in temperature sources",
+          "outdoor_out_air_temperature": "Outdoor air-out temperature sources",
+          "compressor_frequency": "Compressor frequency sources",
+          "compressor_status": "Compressor status sources",
+          "native_power": "Native power sensors",
+          "native_compressor_current": "Compressor current",
+          "native_defrost_status": "Native defrost status",
+          "native_outdoor_fan_status": "Native outdoor fan status"
+        }
+      }
+    },
+    "abort": {
+      "rooms_relink_not_supported": "To re-link indoor units, please remove and re-add the integration. (Calibration is via Number entities — you don't need to come here for that.)"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "what_doing": {
+        "name": "What it's doing",
+        "state": {
+          "off": "Off",
+          "starting": "Starting up",
+          "defrosting": "Defrosting",
+          "fan_only": "Fan only",
+          "auto": "Auto mode",
+          "idle": "Idle",
+          "cooling": "Cooling",
+          "cooling_all": "Cooling all rooms",
+          "heating": "Heating",
+          "heating_all": "Heating all rooms",
+          "drying": "Drying",
+          "drying_all": "Drying all rooms"
+        }
+      },
+      "health": {
+        "name": "Health",
+        "state": {
+          "excellent": "Excellent",
+          "good": "Good",
+          "average": "Average",
+          "problem": "Problem",
+          "starting": "Starting up",
+          "defrosting": "Defrosting",
+          "idle": "Idle",
+          "unknown": "Unknown"
+        }
+      },
+      "efficiency_label": {
+        "name": "Efficiency",
+        "state": {
+          "excellent": "Excellent",
+          "good": "Good",
+          "average": "Average",
+          "low": "Low",
+          "starting": "Starting up",
+          "defrosting": "Defrosting",
+          "idle": "Idle",
+          "unknown": "Unknown"
+        }
+      },
+      "sanity_label": {
+        "name": "Model accuracy",
+        "state": {
+          "normal": "Normal",
+          "slightly_low": "Slightly low",
+          "significantly_low": "Significantly low",
+          "slightly_high": "Slightly high",
+          "significantly_high": "Significantly high",
+          "unknown": "Unknown"
+        }
+      },
+      "seer_grade": {"name": "Cooling class (SEER)"},
+      "scop_grade": {"name": "Heating class (SCOP)"},
+      "outdoor_coil_status": {
+        "name": "Outdoor coil",
+        "state": {
+          "clean": "Clean",
+          "possibly_dirty": "Possibly dirty",
+          "needs_cleaning": "Needs cleaning",
+          "unknown": "Unknown"
+        }
+      },
+      "refrigerant_status": {
+        "name": "Refrigerant",
+        "state": {
+          "normal": "Normal",
+          "leak_suspected": "Leak suspected",
+          "unknown": "Unknown"
+        }
+      },
+      "defrost_status_label": {
+        "name": "Defrost cycles",
+        "state": {
+          "normal": "Normal",
+          "frequent": "Frequent",
+          "long": "Long cycles",
+          "unknown": "Unknown"
+        }
+      },
+      "filter_status_room": {
+        "name": "{room} filter",
+        "state": {
+          "clean": "Clean",
+          "possibly_dirty": "Possibly dirty",
+          "needs_cleaning": "Needs cleaning",
+          "unknown": "Unknown"
+        }
+      },
+      "recommendation_severity": {
+        "name": "Recommendation severity",
+        "state": {
+          "ok": "OK",
+          "info": "Info",
+          "warn": "Warning",
+          "fault": "Fault"
+        }
+      },
+      "recommendation_top": {"name": "Recommendation"},
+      "outdoor_temperature": {"name": "Outdoor temperature"},
+      "outdoor_coil_temperature": {"name": "Outdoor coil temperature"},
+      "outdoor_defrost_temperature": {"name": "Outdoor defrost temperature"},
+      "outdoor_in_air_temperature": {"name": "Outdoor air-in temperature"},
+      "outdoor_out_air_temperature": {"name": "Outdoor air-out temperature"},
+      "outdoor_air_dt": {"name": "Outdoor ΔT"},
+      "compressor_frequency": {"name": "Compressor frequency"},
+      "compressor_current": {"name": "Compressor current"},
+      "compressor_uptime": {"name": "Compressor uptime"},
+      "compressor_starts_per_hour": {"name": "Compressor starts (1h)"},
+      "comp_f_max": {"name": "Compressor f_max"},
+      "comp_f_min": {"name": "Compressor f_min"},
+      "outdoor_fan_rpm": {"name": "Outdoor fan RPM"},
+      "outdoor_airflow": {"name": "Outdoor airflow"},
+      "p_elec_max": {"name": "P_max (paspart)"},
+      "q_max": {"name": "Q_max (paspart)"},
+      "eer_table": {"name": "EER (paspart)"},
+      "p_idle": {"name": "P_idle"},
+      "p_elec_modeled": {"name": "P_elec (modeled)"},
+      "p_elec": {"name": "Electric power"},
+      "q_outdoor_air": {"name": "Q_outdoor (air balance)"},
+      "q_indoor_total": {"name": "Heat output to home"},
+      "q_sensible_total": {"name": "Q_sensible total"},
+      "q_latent_total": {"name": "Q_latent total"},
+      "shr": {"name": "SHR (sensible heat ratio)"},
+      "approach_outdoor": {"name": "Outdoor coil approach"},
+      "eer_instant": {"name": "EER (instant)"},
+      "cop_instant": {"name": "COP (instant)"},
+      "eer_smoothed": {"name": "EER (5 min avg)"},
+      "cop_smoothed": {"name": "COP (5 min avg)"},
+      "eer_expected": {"name": "EER (expected)"},
+      "cop_expected": {"name": "COP (expected)"},
+      "cop_carnot": {"name": "COP × η_Carnot"},
+      "eer_efficiency": {"name": "Cooling efficiency"},
+      "cop_efficiency": {"name": "Heating efficiency"},
+      "eer_efficiency_smoothed": {"name": "Cooling efficiency (5 min)"},
+      "cop_efficiency_smoothed": {"name": "Heating efficiency (5 min)"},
+      "q_sanity_ratio": {"name": "Q sanity ratio"},
+      "q_sanity_smoothed": {"name": "Q sanity (1 hr)"},
+      "e_elec_total": {"name": "Energy (total)"},
+      "e_elec_cool_total": {"name": "Cooling energy (total)"},
+      "e_elec_heat_total": {"name": "Heating energy (total)"},
+      "q_cool_total": {"name": "Cooling output (total)"},
+      "q_heat_total": {"name": "Heating output (total)"},
+      "e_elec_daily": {"name": "Energy (today)"},
+      "e_elec_monthly": {"name": "Energy (this month)"},
+      "e_elec_yearly": {"name": "Energy (this year)"},
+      "e_elec_cool_monthly": {"name": "Cooling energy (this month)"},
+      "e_elec_heat_monthly": {"name": "Heating energy (this month)"},
+      "q_cool_daily": {"name": "Cooling output (today)"},
+      "q_cool_monthly": {"name": "Cooling output (this month)"},
+      "q_heat_daily": {"name": "Heating output (today)"},
+      "q_heat_monthly": {"name": "Heating output (this month)"},
+      "seer_running": {"name": "SEER (running)"},
+      "scop_running": {"name": "SCOP (running)"},
+      "seer_pct": {"name": "SEER (% of paspart)"},
+      "scop_pct": {"name": "SCOP (% of paspart)"},
+      "cost_daily": {"name": "Cost (today)"},
+      "cost_monthly": {"name": "Cost (this month)"},
+      "defrost_count_24h": {"name": "Defrost cycles (24h)"},
+      "outdoor_days": {"name": "Outdoor — days since cleaning"},
+      "filter_days_room": {"name": "{room} — days since filter cleaning"},
+      "q_room": {"name": "{room} heat output"},
+      "q_sensible_room": {"name": "{room} Q sensible"},
+      "share_room": {"name": "{room} share"},
+      "dewpoint_room": {"name": "{room} dewpoint"},
+      "approach_evap_room": {"name": "{room} evaporator approach"}
+    },
+    "binary_sensor": {
+      "compressor_running": {"name": "Compressor running"},
+      "outdoor_fan_running": {"name": "Outdoor fan running"},
+      "in_defrost": {"name": "In defrost"},
+      "steady_state": {"name": "Steady state"},
+      "fdd_outdoor_coil": {"name": "FDD: outdoor coil dirty"},
+      "fdd_refrigerant": {"name": "FDD: refrigerant low suspected"},
+      "fdd_cycling": {"name": "FDD: short cycling"},
+      "fdd_excessive_defrost": {"name": "FDD: excessive defrost"},
+      "fan_running_room": {"name": "{room} fan running"},
+      "condensation_room": {"name": "{room} condensation active"},
+      "fdd_filter_room": {"name": "{room} FDD: filter dirty"}
+    },
+    "number": {
+      "eev_max": {"name": "Calibration: EEV max range"},
+      "eev_idle_cool": {"name": "Calibration: EEV idle (cool/dry)"},
+      "eev_idle_heat": {"name": "Calibration: EEV idle (heat)"},
+      "pipe_length": {"name": "Calibration: total pipe length"},
+      "eta_carnot_cool": {"name": "Calibration: η Carnot (cool)"},
+      "eta_carnot_heat": {"name": "Calibration: η Carnot (heat)"},
+      "idle_base": {"name": "Calibration: idle base PCB"},
+      "idle_indoor_fan": {"name": "Calibration: idle indoor fan (per unit)"},
+      "idle_outdoor_fan": {"name": "Calibration: idle outdoor fan minimum"},
+      "idle_crankcase": {"name": "Calibration: crankcase heater (T<+5°C)"},
+      "outdoor_air_dt_offset": {"name": "Calibration: outdoor ΔT offset"},
+      "bypass_factor": {"name": "Calibration: bypass factor"},
+      "indoor_airflow_nominal": {"name": "Calibration: indoor airflow nominal"},
+      "day_tariff": {"name": "Calibration: day tariff"},
+      "night_tariff": {"name": "Calibration: night tariff"}
+    },
+    "button": {
+      "filter_cleaned_room": {"name": "{room} filter — mark cleaned"},
+      "outdoor_cleaned": {"name": "Outdoor coil — mark cleaned"}
+    }
+  }
+}
