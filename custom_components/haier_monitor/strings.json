@@ -250,6 +250,8 @@
       "scop_pct": {"name": "SCOP (% of paspart)"},
       "cost_daily": {"name": "Cost (today)"},
       "cost_monthly": {"name": "Cost (this month)"},
+      "e_elec_day_daily": {"name": "Energy day-tariff (today)"},
+      "e_elec_night_daily": {"name": "Energy night-tariff (today)"},
       "defrost_count_24h": {"name": "Defrost cycles (24h)"},
       "outdoor_days": {"name": "Outdoor — days since cleaning"},
       "filter_days_room": {"name": "{room} — days since filter cleaning"},

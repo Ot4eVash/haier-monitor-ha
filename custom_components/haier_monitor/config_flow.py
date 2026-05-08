@@ -135,7 +135,7 @@ def _build_room_dict(user_input: dict) -> dict:
 class HaierMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
     """Configure Haier Multi-Split Monitor (fixed two indoor units)."""
 
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
         self._name: str = "Haier Monitor"
@@ -146,6 +146,9 @@ class HaierMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """First step: integration name."""
+        if self._async_current_entries():
+            return self.async_abort(reason="single_instance_allowed")
+
         if user_input is not None:
             self._name = user_input[CONF_NAME]
             return await self.async_step_room_1()

@@ -59,17 +59,21 @@ Calibration parameters are exposed as **Number** entities (Settings → Devices 
 
 ### Critical: check EEV scale immediately
 
-Look at your raw `expansion_valve_open_degree` sensor with the AC off:
-- If shows ~5: leave defaults (steps mode).
-- If shows ~42: set `Calibration: EEV max` = 4095, `EEV idle cool` = 42, `EEV idle heat` = 683 (encoded mode).
+Look at your raw `expansion_valve_open_degree` sensor in HA after the AC has been off for 5+ minutes (idle, cool mode):
+
+- **~0.001-0.05** → `paveldn/haier-esphome` master fraction publication (default since v1.1). Leave defaults.
+- **~5-10** → legacy "raw steps" publication (e.g., older ESPHome versions or other forks). Set `Calibration: EEV max` = 500, `EEV idle cool` = 5, `EEV idle heat` = 80.
+- **~40-100** → some firmware variants publish raw 12-bit code without dividing. Set `Calibration: EEV max` = 4095, `EEV idle cool` = 42, `EEV idle heat` = 683.
+
+If left misconfigured, per-room heat distribution (`q_room`) collapses to 0 for every room and the EEV-based refrigerant-leak indicator stops voting.
 
 ### Recommended after 1-2 weeks of operation
 
-| Number entity | Meaning | Default |
+| Number entity | Meaning | Default (1.1) |
 |---|---|---|
-| `Calibration: EEV max` | Max value of the EEV sensor (steps or encoded) | 500 |
-| `Calibration: EEV idle (cool/dry)` | EEV bleed-through in cool mode | 5 |
-| `Calibration: EEV idle (heat)` | EEV bleed-through in heat mode | 80 |
+| `Calibration: EEV max` | Full-open value of the EEV sensor | 1.0 (fraction) |
+| `Calibration: EEV idle (cool/dry)` | EEV bleed-through in cool mode | 0.001 |
+| `Calibration: EEV idle (heat)` | EEV bleed-through in heat mode | 0.16 |
 | `Calibration: pipe length` | Total refrigerant pipe length (m) | 5 |
 | `Calibration: η Carnot (cool/heat)` | Machine efficiency vs Carnot ideal | 0.40 / 0.45 |
 | `Calibration: idle base PCB` | Base power: PCB + sensor bias | 8 W |
@@ -203,6 +207,23 @@ Steady-state requires compressor uptime > 5 min AND no defrost. If your compress
 - Section 7.1.4 — outdoor fan RPM tables (3×3 + extra row)
 - Section 7.1.5 — EEV control (idle cool: 5 steps; idle heat: 80 steps)
 - Section 11.1-11.4 — performance curves (P_max, Q_max at 8 cooling × 7 heating reference points)
+
+## Changelog
+
+### 1.1.0
+- **EEV scale fix (critical):** defaults aligned with `paveldn/haier-esphome` master, which publishes `expansion_valve_open_degree` as a fraction `0.0..1.0` (raw/4095). Previous defaults assumed "raw steps" and broke per-room `q_room` distribution and the EEV indicator of refrigerant FDD on most installations. Number-entity bounds widened to allow fraction calibration. Auto-migration (config entry v1 → v2) resets EEV calibration to the new defaults if the legacy default triple `500/5/80` is detected.
+- **Truthiness fix:** lookup-table inputs no longer fall back to `20.0 °C` when `T_outdoor == 0.0 °C` (`coordinator.py`).
+- **Cost calculation fix:** day/night kWh allocation is now used for `cost_daily/monthly/yearly` instead of `(day+night)/2 × total_kwh`. Adds two opt-in sensors `e_elec_day_daily` and `e_elec_night_daily`.
+- **SEER/SCOP bias fix:** `p_cool/p_heat` is now gated on `steady_state` to mirror `q_indoor`, eliminating the systematic downward bias caused by integrating start-up / defrost electricity without matching heat output.
+- **Defrost detection:** outdoor-fan-running fallback now correctly drops to `False` during defrost, removing a 50 W bias in `p_idle`.
+- **q_kitchen / q_bedroom → q_room1 / q_room2:** internal field rename so storage matches actual room positions, not hardcoded names. Existing `.storage/haier_monitor.*.energy` files are migrated transparently on first load.
+- **Midnight rollover:** daily/monthly/yearly snapshots are now taken via `async_track_time_change` at local 00:00 instead of "first tick after midnight", removing a few-hour data loss when HA restarts after a date change.
+- **FDD constant:** the magic `15` in heat-mode refrigerant detection replaced with `FDD_REFRIGERANT_APPROACH_HEAT`.
+- **Single-instance enforcement:** config flow now aborts on duplicate setup with the documented `single_instance_allowed` reason.
+- Removed dead `STEADY_STATE_MIN_POWER_W` constant; manifest `iot_class` set to standard `local_polling`.
+
+### 1.0.0
+Initial release.
 
 ## License
 

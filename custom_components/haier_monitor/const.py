@@ -54,9 +54,14 @@ OPT_DAY_TARIFF: Final = "day_tariff"
 OPT_NIGHT_TARIFF: Final = "night_tariff"
 
 # --- Calibration defaults ---
-DEFAULT_EEV_MAX: Final = 500.0           # steps mode; 4095 if encoded
-DEFAULT_EEV_IDLE_COOL: Final = 5.0       # service manual section 7.1.5
-DEFAULT_EEV_IDLE_HEAT: Final = 80.0      # service manual section 7.1.5
+# EEV scale matches paveldn/haier-esphome master: hon_climate.cpp publishes
+# expansion_valve_open_degree as raw/4095.0 (fraction 0.0..1.0). The unit label
+# is "%" but the value is NOT scaled to 0..100 — it's a normalized fraction.
+# Idle physical positions per Service Manual §7.1.5 are 5 steps cool / 80 heat
+# on a 500-step PMV; expressed as fraction 0..1 they correspond to ≈ 0.001 / 0.16.
+DEFAULT_EEV_MAX: Final = 1.0             # fraction of full open
+DEFAULT_EEV_IDLE_COOL: Final = 0.001     # ≈ 5/4095 — service manual §7.1.5
+DEFAULT_EEV_IDLE_HEAT: Final = 0.16      # ≈ 660/4095 — service manual §7.1.5
 DEFAULT_PIPE_LENGTH: Final = 5.0         # m, standard pre-charge length
 DEFAULT_ETA_CARNOT_COOL: Final = 0.40    # R32 ASHP typical
 DEFAULT_ETA_CARNOT_HEAT: Final = 0.45    # R32 ASHP typical
@@ -94,7 +99,6 @@ ENERGY_UPDATE_INTERVAL_SECONDS: Final = 60  # for Riemann sum integration
 
 # --- Steady state thresholds ---
 STEADY_STATE_MIN_UPTIME_SECONDS: Final = 300   # 5 min
-STEADY_STATE_MIN_POWER_W: Final = 50
 
 # --- FDD persistence windows (seconds) ---
 FDD_OUTDOOR_COIL_DELAY: Final = 3600         # 1h
@@ -116,6 +120,7 @@ FDD_FILTER_APPROACH_WARN: Final = 14.0               # °C
 FDD_FILTER_FROST_THRESHOLD: Final = 3.0              # °C T_indoor_coil
 FDD_REFRIGERANT_EFFICIENCY_THRESHOLD: Final = 0.70   # actual/expected
 FDD_REFRIGERANT_EEV_THRESHOLD: Final = 0.85          # fraction
+FDD_REFRIGERANT_APPROACH_HEAT: Final = 15.0          # °C, indicator threshold for heat-mode leak suspicion
 FDD_CYCLING_STARTS_PER_HOUR: Final = 5
 FDD_DEFROST_EXCESS_PER_24H: Final = 10
 FDD_DEFROST_LONG_MINUTES: Final = 12

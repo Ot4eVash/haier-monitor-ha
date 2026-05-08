@@ -148,6 +148,10 @@ SENSOR_DEFS: list[HaierSensorDef] = [
     HaierSensorDef("cost_daily", "cost_daily", "mdi:cash", DEFAULT_CURRENCY, SensorDeviceClass.MONETARY, SensorStateClass.TOTAL, decimals=2),
     HaierSensorDef("cost_monthly", "cost_monthly", "mdi:cash", DEFAULT_CURRENCY, SensorDeviceClass.MONETARY, SensorStateClass.TOTAL, decimals=2),
 
+    # Tariff buckets (for transparency / energy dashboard verification)
+    HaierSensorDef("e_elec_day_daily", "e_elec_day_daily", "mdi:weather-sunny", UnitOfEnergy.KILO_WATT_HOUR, SensorDeviceClass.ENERGY, SensorStateClass.TOTAL_INCREASING, decimals=3, enabled_by_default=False),
+    HaierSensorDef("e_elec_night_daily", "e_elec_night_daily", "mdi:weather-night", UnitOfEnergy.KILO_WATT_HOUR, SensorDeviceClass.ENERGY, SensorStateClass.TOTAL_INCREASING, decimals=3, enabled_by_default=False),
+
     # Layer 7: status enums
     HaierSensorDef(
         "what_doing", "what_doing", None, None, SensorDeviceClass.ENUM, None,
