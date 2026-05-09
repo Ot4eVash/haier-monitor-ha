@@ -250,6 +250,8 @@
       "scop_pct": {"name": "SCOP % паспорта"},
       "cost_daily": {"name": "Стоимость за день"},
       "cost_monthly": {"name": "Стоимость за месяц"},
+      "e_elec_day_daily": {"name": "Электричество (день, сегодня)"},
+      "e_elec_night_daily": {"name": "Электричество (ночь, сегодня)"},
       "defrost_count_24h": {"name": "Циклов оттайки (24ч)"},
       "outdoor_days": {"name": "Наружник — дней с промывки"},
       "filter_days_room": {"name": "{room} — дней с чистки фильтра"},

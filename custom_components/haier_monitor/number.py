@@ -70,10 +70,12 @@ class HaierNumberDef:
 
 
 NUMBER_DEFS: list[HaierNumberDef] = [
-    # EEV calibration
-    HaierNumberDef(OPT_EEV_MAX, "eev_max", DEFAULT_EEV_MAX, 100.0, 5000.0, step=1.0, icon="mdi:valve"),
-    HaierNumberDef(OPT_EEV_IDLE_COOL, "eev_idle_cool", DEFAULT_EEV_IDLE_COOL, 0.0, 1000.0, step=1.0, icon="mdi:valve-closed"),
-    HaierNumberDef(OPT_EEV_IDLE_HEAT, "eev_idle_heat", DEFAULT_EEV_IDLE_HEAT, 0.0, 1000.0, step=1.0, icon="mdi:valve-closed"),
+    # EEV calibration — units depend on what your ESPHome publishes.
+    # paveldn/haier-esphome publishes a fraction 0.0..1.0 (defaults match this).
+    # Steps-mode firmware can use 0..500 with corresponding integer idle values.
+    HaierNumberDef(OPT_EEV_MAX, "eev_max", DEFAULT_EEV_MAX, 0.001, 5000.0, step=0.001, icon="mdi:valve", mode=NumberMode.BOX),
+    HaierNumberDef(OPT_EEV_IDLE_COOL, "eev_idle_cool", DEFAULT_EEV_IDLE_COOL, 0.0, 2000.0, step=0.001, icon="mdi:valve-closed", mode=NumberMode.BOX),
+    HaierNumberDef(OPT_EEV_IDLE_HEAT, "eev_idle_heat", DEFAULT_EEV_IDLE_HEAT, 0.0, 2000.0, step=0.001, icon="mdi:valve-closed", mode=NumberMode.BOX),
 
     # Pipe length
     HaierNumberDef(OPT_PIPE_LENGTH, "pipe_length", DEFAULT_PIPE_LENGTH, 0.0, 30.0, step=0.5, unit="m", icon="mdi:pipe"),
@@ -94,8 +96,8 @@ NUMBER_DEFS: list[HaierNumberDef] = [
     # Bypass factor
     HaierNumberDef(OPT_BYPASS_FACTOR, "bypass_factor", DEFAULT_BYPASS_FACTOR, 0.05, 0.30, step=0.01, icon="mdi:air-conditioner"),
 
-    # Indoor airflow
-    HaierNumberDef(OPT_INDOOR_AIRFLOW_NOMINAL, "indoor_airflow_nominal", DEFAULT_INDOOR_AIRFLOW_NOMINAL, 200.0, 2000.0, step=10.0, unit="m³/h", icon="mdi:weather-windy"),
+    # Indoor airflow (AS25 Lo/Mid/Hi: 700/900/1100; AS35: 800/1000/1200; cassettes can exceed 1500)
+    HaierNumberDef(OPT_INDOOR_AIRFLOW_NOMINAL, "indoor_airflow_nominal", DEFAULT_INDOOR_AIRFLOW_NOMINAL, 200.0, 2500.0, step=10.0, unit="m³/h", icon="mdi:weather-windy"),
 
     # Tariffs
     HaierNumberDef(OPT_DAY_TARIFF, "day_tariff", DEFAULT_DAY_TARIFF, 0.0, 100.0, step=0.01, icon="mdi:cash"),

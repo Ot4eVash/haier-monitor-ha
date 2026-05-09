@@ -34,7 +34,6 @@ from . import lookup_tables as lt
 from . import physics as ph
 from .const import (
     ACTIVE_COOL_MODES,
-    AIR_VOLUMETRIC_FACTOR,
     CONF_CLIMATE_ENTITY,
     CONF_COMPRESSOR_FREQUENCY,
     CONF_COMPRESSOR_STATUS,
@@ -87,6 +86,7 @@ from .const import (
     FDD_OUTDOOR_COIL_APPROACH_COOL_WARN,
     FDD_OUTDOOR_COIL_APPROACH_HEAT_FAULT,
     FDD_OUTDOOR_COIL_APPROACH_HEAT_WARN,
+    FDD_REFRIGERANT_APPROACH_HEAT,
     FDD_REFRIGERANT_EEV_THRESHOLD,
     FDD_REFRIGERANT_EFFICIENCY_THRESHOLD,
     FILTER_CLEAN_REMINDER_DAYS,
@@ -134,10 +134,8 @@ from .const import (
     SEVERITY_INFO,
     SEVERITY_OK,
     SEVERITY_WARN,
-    STEADY_STATE_MIN_POWER_W,
     STEADY_STATE_MIN_UPTIME_SECONDS,
     STORAGE_KEY_ENERGY,
-    STORAGE_KEY_HISTORY,
     STORAGE_KEY_MAINTENANCE,
     STORAGE_VERSION,
     UPDATE_INTERVAL_SECONDS,
@@ -297,8 +295,8 @@ class EnergyIntegrator:
     heat_total_kwh: float = 0.0
     q_cool_total_kwh: float = 0.0
     q_heat_total_kwh: float = 0.0
-    q_kitchen_total_kwh: float = 0.0
-    q_bedroom_total_kwh: float = 0.0
+    q_room1_total_kwh: float = 0.0
+    q_room2_total_kwh: float = 0.0
     q_sensible_total_kwh: float = 0.0
     q_latent_total_kwh: float = 0.0
     last_update: Optional[datetime] = None
@@ -314,6 +312,12 @@ class EnergyIntegrator:
     # Per-tariff cumulative (day/night for cost calc)
     day_kwh: float = 0.0
     night_kwh: float = 0.0
+    day_kwh_daily_snapshot: float = 0.0
+    night_kwh_daily_snapshot: float = 0.0
+    day_kwh_monthly_snapshot: float = 0.0
+    night_kwh_monthly_snapshot: float = 0.0
+    day_kwh_yearly_snapshot: float = 0.0
+    night_kwh_yearly_snapshot: float = 0.0
 
     def integrate(
         self,
@@ -322,8 +326,8 @@ class EnergyIntegrator:
         p_heat_w: float,
         q_cool_w: float,
         q_heat_w: float,
-        q_kitchen_w: float,
-        q_bedroom_w: float,
+        q_room1_w: float,
+        q_room2_w: float,
         q_sensible_w: float,
         q_latent_w: float,
         now: datetime,
@@ -342,8 +346,8 @@ class EnergyIntegrator:
         self.heat_total_kwh += (p_heat_w / 1000) * dt_h
         self.q_cool_total_kwh += (q_cool_w / 1000) * dt_h
         self.q_heat_total_kwh += (q_heat_w / 1000) * dt_h
-        self.q_kitchen_total_kwh += (q_kitchen_w / 1000) * dt_h
-        self.q_bedroom_total_kwh += (q_bedroom_w / 1000) * dt_h
+        self.q_room1_total_kwh += (q_room1_w / 1000) * dt_h
+        self.q_room2_total_kwh += (q_room2_w / 1000) * dt_h
         self.q_sensible_total_kwh += (q_sensible_w / 1000) * dt_h
         self.q_latent_total_kwh += (q_latent_w / 1000) * dt_h
 
@@ -371,8 +375,8 @@ class EnergyIntegrator:
             "heat_total_kwh": self.heat_total_kwh,
             "q_cool_total_kwh": self.q_cool_total_kwh,
             "q_heat_total_kwh": self.q_heat_total_kwh,
-            "q_kitchen_total_kwh": self.q_kitchen_total_kwh,
-            "q_bedroom_total_kwh": self.q_bedroom_total_kwh,
+            "q_room1_total_kwh": self.q_room1_total_kwh,
+            "q_room2_total_kwh": self.q_room2_total_kwh,
             "q_sensible_total_kwh": self.q_sensible_total_kwh,
             "q_latent_total_kwh": self.q_latent_total_kwh,
             "daily_snapshots": self.daily_snapshots,
@@ -383,14 +387,33 @@ class EnergyIntegrator:
             "last_yearly_reset": self.last_yearly_reset,
             "day_kwh": self.day_kwh,
             "night_kwh": self.night_kwh,
+            "day_kwh_daily_snapshot": self.day_kwh_daily_snapshot,
+            "night_kwh_daily_snapshot": self.night_kwh_daily_snapshot,
+            "day_kwh_monthly_snapshot": self.day_kwh_monthly_snapshot,
+            "night_kwh_monthly_snapshot": self.night_kwh_monthly_snapshot,
+            "day_kwh_yearly_snapshot": self.day_kwh_yearly_snapshot,
+            "night_kwh_yearly_snapshot": self.night_kwh_yearly_snapshot,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "EnergyIntegrator":
         e = cls()
+        # Legacy field rename (1.0 → 1.1): q_kitchen/q_bedroom → q_room1/q_room2
+        if "q_kitchen_total_kwh" in data and "q_room1_total_kwh" not in data:
+            data["q_room1_total_kwh"] = data.pop("q_kitchen_total_kwh")
+        if "q_bedroom_total_kwh" in data and "q_room2_total_kwh" not in data:
+            data["q_room2_total_kwh"] = data.pop("q_bedroom_total_kwh")
         for k, v in data.items():
             if hasattr(e, k):
                 setattr(e, k, v)
+        # Same rename inside snapshot dicts
+        for snap_attr in ("daily_snapshots", "monthly_snapshots", "yearly_snapshots"):
+            snap = getattr(e, snap_attr, None)
+            if isinstance(snap, dict):
+                if "q_kitchen" in snap and "q_room1" not in snap:
+                    snap["q_room1"] = snap.pop("q_kitchen")
+                if "q_bedroom" in snap and "q_room2" not in snap:
+                    snap["q_room2"] = snap.pop("q_bedroom")
         return e
 
 
@@ -463,6 +486,24 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
         """Save energy and maintenance state to disk."""
         await self._store_energy.async_save(self._energy.to_dict())
         await self._store_maintenance.async_save(self.maintenance_data)
+
+    @callback
+    def async_register_midnight_listener(self):
+        """Snapshot energy buckets exactly at local-time 00:00 each day.
+
+        Without this, the daily/monthly rollover only happens on the first
+        coordinator tick after midnight — which after an HA restart at 03:00
+        would silently absorb several hours of consumption into the new
+        daily snapshot. Returns the unsubscribe function.
+        """
+        async def _at_midnight(_now: datetime) -> None:
+            self._maybe_reset_periods(dt_util.utcnow())
+            await self.async_save_persistent()
+            await self.async_request_refresh()
+
+        return async_track_time_change(
+            self.hass, _at_midnight, hour=0, minute=0, second=2
+        )
 
     async def async_set_filter_cleaned(self, room_name: str) -> None:
         """Mark filter as cleaned now for given room."""
@@ -660,13 +701,9 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
         self._cycling_tracker.update(compressor_running, now)
         data["compressor_starts_per_hour"] = self._cycling_tracker.starts_per_hour()
 
-        # Outdoor fan running (native or fallback to compressor)
-        outdoor_fan_running = (
-            native_outdoor_fan if native_outdoor_fan is not None else compressor_running
-        )
-        data["outdoor_fan_running"] = outdoor_fan_running
-
-        # Defrost detection
+        # Defrost detection (must run before outdoor_fan fallback —
+        # during defrost the outdoor fan is OFF even though compressor is ON,
+        # so the proxy must subtract this case to avoid double-counting fan idle power).
         in_defrost = ph.is_defrost(
             mode=mode,
             compressor_running=compressor_running,
@@ -681,6 +718,13 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
         data["defrost_count_24h"] = self._defrost_history.count_24h()
         data["defrost_avg_minutes"] = self._defrost_history.avg_duration_min()
 
+        # Outdoor fan running (native or fallback to compressor minus defrost)
+        if native_outdoor_fan is not None:
+            outdoor_fan_running = native_outdoor_fan
+        else:
+            outdoor_fan_running = compressor_running and not in_defrost
+        data["outdoor_fan_running"] = outdoor_fan_running
+
         # Steady state
         steady_state = (
             compressor_running
@@ -690,16 +734,21 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
         data["steady_state"] = steady_state
 
         # ------ Layer 2: lookup tables ------
-        comp_f_max = lt.f_max(t_outdoor or 20.0, mode)
+        # Use `is None` checks rather than `or` to avoid truthiness bug where
+        # T_outdoor = 0.0°C (common in winter / ESPHome stale-state edge cases)
+        # would silently fall back to 20.0°C and skew lookup tables by 3-5×.
+        t_for_tables = t_outdoor if t_outdoor is not None else 20.0
+        f_for_rpm = f_comp if f_comp is not None else 0.0
+        comp_f_max = lt.f_max(t_for_tables, mode)
         comp_f_min = lt.f_min(mode)
         outdoor_fan_rpm = (
-            lt.outdoor_fan_rpm(t_outdoor or 20.0, f_comp or 0, mode)
+            lt.outdoor_fan_rpm(t_for_tables, f_for_rpm, mode)
             if outdoor_fan_running
             else 0.0
         )
         airflow = lt.outdoor_airflow(outdoor_fan_rpm)
-        p_max = lt.p_max_table(t_outdoor or 20.0, avg_indoor_temp, mode)
-        q_max = lt.q_max_table(t_outdoor or 20.0, avg_indoor_temp, mode)
+        p_max = lt.p_max_table(t_for_tables, avg_indoor_temp, mode)
+        q_max = lt.q_max_table(t_for_tables, avg_indoor_temp, mode)
 
         data["comp_f_max"] = comp_f_max
         data["comp_f_min"] = comp_f_min
@@ -878,13 +927,18 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
         data["q_sanity_smoothed"] = self._smooth_q_sanity.mean
 
         # ------ Layer 6: energy integration ------
-        p_cool = p_elec if mode in ACTIVE_COOL_MODES else 0.0
-        p_heat = p_elec if mode == MODE_HEAT else 0.0
+        # SEER/SCOP must be computed over comparable windows: q_indoor is
+        # gated to 0 outside steady_state (in physics.q_indoor_total), so
+        # mirror that gate on p_cool/p_heat to avoid systematic SEER bias.
+        # The unconditional `p_elec` is still integrated as `total_kwh`.
+        seer_window = steady_state and not in_defrost
+        p_cool = p_elec if (mode in ACTIVE_COOL_MODES and seer_window) else 0.0
+        p_heat = p_elec if (mode == MODE_HEAT and seer_window) else 0.0
         q_cool_w = q_indoor if mode in ACTIVE_COOL_MODES else 0.0
         q_heat_w = q_indoor if mode == MODE_HEAT else 0.0
         rooms_list = list(rooms_data.items())
-        q_kitchen = rooms_list[0][1].get("q_room", 0.0) if rooms_list else 0.0
-        q_bedroom = rooms_list[1][1].get("q_room", 0.0) if len(rooms_list) > 1 else 0.0
+        q_room1 = rooms_list[0][1].get("q_room", 0.0) if rooms_list else 0.0
+        q_room2 = rooms_list[1][1].get("q_room", 0.0) if len(rooms_list) > 1 else 0.0
 
         self._energy.integrate(
             p_elec_w=p_elec,
@@ -892,8 +946,8 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
             p_heat_w=p_heat,
             q_cool_w=q_cool_w,
             q_heat_w=q_heat_w,
-            q_kitchen_w=q_kitchen,
-            q_bedroom_w=q_bedroom,
+            q_room1_w=q_room1,
+            q_room2_w=q_room2,
             q_sensible_w=q_sensible_total,
             q_latent_w=q_latent_total,
             now=now,
@@ -912,8 +966,8 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
         data["e_elec_heat_total"] = self._energy.heat_total_kwh
         data["q_cool_total"] = self._energy.q_cool_total_kwh
         data["q_heat_total"] = self._energy.q_heat_total_kwh
-        data["q_kitchen_total"] = self._energy.q_kitchen_total_kwh
-        data["q_bedroom_total"] = self._energy.q_bedroom_total_kwh
+        data["q_room1_total"] = self._energy.q_room1_total_kwh
+        data["q_room2_total"] = self._energy.q_room2_total_kwh
         data["q_sensible_total_kwh"] = self._energy.q_sensible_total_kwh
         data["q_latent_total_kwh"] = self._energy.q_latent_total_kwh
 
@@ -944,11 +998,11 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
         data["q_heat_monthly"] = self._energy.get_period_value(
             self._energy.monthly_snapshots, self._energy.q_heat_total_kwh, "q_heat"
         )
-        data["q_kitchen_monthly"] = self._energy.get_period_value(
-            self._energy.monthly_snapshots, self._energy.q_kitchen_total_kwh, "q_kitchen"
+        data["q_room1_monthly"] = self._energy.get_period_value(
+            self._energy.monthly_snapshots, self._energy.q_room1_total_kwh, "q_room1"
         )
-        data["q_bedroom_monthly"] = self._energy.get_period_value(
-            self._energy.monthly_snapshots, self._energy.q_bedroom_total_kwh, "q_bedroom"
+        data["q_room2_monthly"] = self._energy.get_period_value(
+            self._energy.monthly_snapshots, self._energy.q_room2_total_kwh, "q_room2"
         )
 
         # SEER / SCOP running
@@ -979,13 +1033,22 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
             data["scop_running"], SCOP_CLASS_BOUNDARIES
         )
 
-        # Cost (using day/night tariffs)
+        # Cost via tariff-aware allocation: day/night kWh tracked separately
+        # in EnergyIntegrator and snapshotted at period boundaries — multiply
+        # each fraction by its own tariff, never the average.
         day_tariff = self._opt(OPT_DAY_TARIFF, DEFAULT_DAY_TARIFF)
         night_tariff = self._opt(OPT_NIGHT_TARIFF, DEFAULT_NIGHT_TARIFF)
-        avg_tariff = (day_tariff + night_tariff) / 2
-        data["cost_daily"] = data["e_elec_daily"] * avg_tariff
-        data["cost_monthly"] = data["e_elec_monthly"] * avg_tariff
-        data["cost_yearly"] = data["e_elec_yearly"] * avg_tariff
+        day_daily = max(0.0, self._energy.day_kwh - self._energy.day_kwh_daily_snapshot)
+        night_daily = max(0.0, self._energy.night_kwh - self._energy.night_kwh_daily_snapshot)
+        day_monthly = max(0.0, self._energy.day_kwh - self._energy.day_kwh_monthly_snapshot)
+        night_monthly = max(0.0, self._energy.night_kwh - self._energy.night_kwh_monthly_snapshot)
+        day_yearly = max(0.0, self._energy.day_kwh - self._energy.day_kwh_yearly_snapshot)
+        night_yearly = max(0.0, self._energy.night_kwh - self._energy.night_kwh_yearly_snapshot)
+        data["cost_daily"] = day_daily * day_tariff + night_daily * night_tariff
+        data["cost_monthly"] = day_monthly * day_tariff + night_monthly * night_tariff
+        data["cost_yearly"] = day_yearly * day_tariff + night_yearly * night_tariff
+        data["e_elec_day_daily"] = day_daily
+        data["e_elec_night_daily"] = night_daily
 
         # ------ Layer 7: status enums ------
         data["health"] = self._compute_health(data)
@@ -1064,7 +1127,7 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
                     ind3 = max_eev_frac > FDD_REFRIGERANT_EEV_THRESHOLD
                     refrig_cond = sum([ind1, ind2, ind3]) >= 2
             elif mode == MODE_HEAT:
-                ind1 = ap_smoothed is not None and ap_smoothed > 15
+                ind1 = ap_smoothed is not None and ap_smoothed > FDD_REFRIGERANT_APPROACH_HEAT
                 ind2 = eff_smoothed is not None and eff_smoothed < FDD_REFRIGERANT_EFFICIENCY_THRESHOLD
                 ind3 = max_eev_frac > FDD_REFRIGERANT_EEV_THRESHOLD
                 refrig_cond = sum([ind1, ind2, ind3]) >= 2
@@ -1114,7 +1177,11 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
         return data
 
     def _maybe_reset_periods(self, now: datetime) -> None:
-        """Take energy snapshot at start of new day/month/year."""
+        """Take energy snapshot at start of new day/month/year.
+
+        Triggered by both the periodic coordinator update and an explicit
+        midnight time-change listener (see __init__.py); idempotent.
+        """
         local_now = dt_util.as_local(now)
         date_key = local_now.strftime("%Y-%m-%d")
         month_key = local_now.strftime("%Y-%m")
@@ -1127,9 +1194,11 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
                 "e_elec_heat": self._energy.heat_total_kwh,
                 "q_cool": self._energy.q_cool_total_kwh,
                 "q_heat": self._energy.q_heat_total_kwh,
-                "q_kitchen": self._energy.q_kitchen_total_kwh,
-                "q_bedroom": self._energy.q_bedroom_total_kwh,
+                "q_room1": self._energy.q_room1_total_kwh,
+                "q_room2": self._energy.q_room2_total_kwh,
             }
+            self._energy.day_kwh_daily_snapshot = self._energy.day_kwh
+            self._energy.night_kwh_daily_snapshot = self._energy.night_kwh
             self._energy.last_daily_reset = date_key
 
         if self._energy.last_monthly_reset != month_key:
@@ -1139,15 +1208,19 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
                 "e_elec_heat": self._energy.heat_total_kwh,
                 "q_cool": self._energy.q_cool_total_kwh,
                 "q_heat": self._energy.q_heat_total_kwh,
-                "q_kitchen": self._energy.q_kitchen_total_kwh,
-                "q_bedroom": self._energy.q_bedroom_total_kwh,
+                "q_room1": self._energy.q_room1_total_kwh,
+                "q_room2": self._energy.q_room2_total_kwh,
             }
+            self._energy.day_kwh_monthly_snapshot = self._energy.day_kwh
+            self._energy.night_kwh_monthly_snapshot = self._energy.night_kwh
             self._energy.last_monthly_reset = month_key
 
         if self._energy.last_yearly_reset != year_key:
             self._energy.yearly_snapshots = {
                 "e_elec": self._energy.total_kwh,
             }
+            self._energy.day_kwh_yearly_snapshot = self._energy.day_kwh
+            self._energy.night_kwh_yearly_snapshot = self._energy.night_kwh
             self._energy.last_yearly_reset = year_key
 
     def _days_since(self, iso_str: Optional[str]) -> int:
