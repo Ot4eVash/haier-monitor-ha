@@ -32,30 +32,49 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate config entry options between schema versions.
 
     1 → 2: EEV calibration units changed from raw steps (max=500) to fraction
-    of full open (max=1.0), aligned with paveldn/haier-esphome's
-    raw/4095 publication. Old options are detected by the legacy default
-    triple (500.0 / 5.0 / 80.0) and reset to None so the new defaults apply.
+    of full open (max=1.0), aligned with paveldn/haier-esphome's raw/4095
+    publication. Legacy default triple 500/5/80 is reset.
+
+    2 → 3: EEV defaults refined to physical 500-pulse PMV scale (0.122
+    fraction max, idle cool 0.0012, idle heat 0.020). The previous 1.1
+    defaults (1.0/0.001/0.16) overestimated full-open by 8× and idle-heat
+    by 8×, so the EEV-based refrigerant FDD indicator never fired. Same
+    legacy-default detection logic is applied.
     """
-    if entry.version >= 2:
+    if entry.version >= 3:
         return True
 
     options = dict(entry.options)
-    legacy_eev = (
-        options.get(OPT_EEV_MAX) == 500.0
-        and options.get(OPT_EEV_IDLE_COOL) == 5.0
-        and options.get(OPT_EEV_IDLE_HEAT) == 80.0
-    )
-    if legacy_eev:
-        options[OPT_EEV_MAX] = DEFAULT_EEV_MAX
-        options[OPT_EEV_IDLE_COOL] = DEFAULT_EEV_IDLE_COOL
-        options[OPT_EEV_IDLE_HEAT] = DEFAULT_EEV_IDLE_HEAT
-        _LOGGER.warning(
-            "Haier Monitor: migrated EEV calibration from raw-steps (500/5/80) "
-            "to fraction (1.0/0.001/0.16). Re-check Calibration: EEV* numbers "
-            "if your ESPHome publishes raw step values instead of fractions."
-        )
 
-    hass.config_entries.async_update_entry(entry, options=options, version=2)
+    # 1 → 2: raw steps → fraction
+    if entry.version < 2:
+        legacy_v1 = (
+            options.get(OPT_EEV_MAX) == 500.0
+            and options.get(OPT_EEV_IDLE_COOL) == 5.0
+            and options.get(OPT_EEV_IDLE_HEAT) == 80.0
+        )
+        if legacy_v1:
+            options[OPT_EEV_MAX] = DEFAULT_EEV_MAX
+            options[OPT_EEV_IDLE_COOL] = DEFAULT_EEV_IDLE_COOL
+            options[OPT_EEV_IDLE_HEAT] = DEFAULT_EEV_IDLE_HEAT
+            _LOGGER.warning(
+                "Haier Monitor: migrated EEV calibration v1 raw-steps (500/5/80) "
+                "→ v3 fraction (%.3f/%.4f/%.3f). If your ESPHome publishes raw "
+                "step values instead of fractions, re-set them manually.",
+                DEFAULT_EEV_MAX, DEFAULT_EEV_IDLE_COOL, DEFAULT_EEV_IDLE_HEAT,
+            )
+
+    # 2 → 3: refined EEV fractions to physical 500-pulse scale
+    if entry.version < 3:
+        # Replace the 1.1 defaults if user kept them
+        if options.get(OPT_EEV_MAX) == 1.0:
+            options[OPT_EEV_MAX] = DEFAULT_EEV_MAX
+        if options.get(OPT_EEV_IDLE_COOL) == 0.001:
+            options[OPT_EEV_IDLE_COOL] = DEFAULT_EEV_IDLE_COOL
+        if options.get(OPT_EEV_IDLE_HEAT) == 0.16:
+            options[OPT_EEV_IDLE_HEAT] = DEFAULT_EEV_IDLE_HEAT
+
+    hass.config_entries.async_update_entry(entry, options=options, version=3)
     return True
 
 

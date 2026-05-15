@@ -213,6 +213,15 @@
       "p_elec": {"name": "Electric power"},
       "q_outdoor_air": {"name": "Q_outdoor (air balance)"},
       "q_indoor_total": {"name": "Heat output to home"},
+      "q_method": {
+        "name": "Q calculation method",
+        "state": {
+          "indoor": "Indoor coil enthalpy",
+          "outdoor_air": "Outdoor air enthalpy",
+          "carnot": "Carnot estimate",
+          "none": "Unavailable"
+        }
+      },
       "q_sensible_total": {"name": "Q_sensible total"},
       "q_latent_total": {"name": "Q_latent total"},
       "shr": {"name": "SHR (sensible heat ratio)"},
@@ -286,6 +295,8 @@
       "idle_outdoor_fan": {"name": "Calibration: idle outdoor fan minimum"},
       "idle_crankcase": {"name": "Calibration: crankcase heater (T<+5°C)"},
       "outdoor_air_dt_offset": {"name": "Calibration: outdoor ΔT offset"},
+      "outdoor_temperature_offset": {"name": "Calibration: outdoor T offset"},
+      "steady_state_uptime_seconds": {"name": "Calibration: steady-state uptime (s)"},
       "bypass_factor": {"name": "Calibration: bypass factor"},
       "indoor_airflow_nominal": {"name": "Calibration: indoor airflow nominal"},
       "day_tariff": {"name": "Calibration: day tariff"},

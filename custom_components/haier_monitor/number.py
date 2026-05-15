@@ -32,7 +32,9 @@ from .const import (
     DEFAULT_INDOOR_AIRFLOW_NOMINAL,
     DEFAULT_NIGHT_TARIFF,
     DEFAULT_OUTDOOR_AIR_DT_OFFSET,
+    DEFAULT_OUTDOOR_T_OFFSET,
     DEFAULT_PIPE_LENGTH,
+    DEFAULT_STEADY_UPTIME_SEC,
     DOMAIN,
     OPT_BYPASS_FACTOR,
     OPT_DAY_TARIFF,
@@ -48,7 +50,9 @@ from .const import (
     OPT_INDOOR_AIRFLOW_NOMINAL,
     OPT_NIGHT_TARIFF,
     OPT_OUTDOOR_AIR_DT_OFFSET,
+    OPT_OUTDOOR_T_OFFSET,
     OPT_PIPE_LENGTH,
+    OPT_STEADY_UPTIME_SEC,
 )
 from .coordinator import HaierMonitorCoordinator
 from .entity import HaierMonitorEntity
@@ -90,8 +94,12 @@ NUMBER_DEFS: list[HaierNumberDef] = [
     HaierNumberDef(OPT_IDLE_OUTDOOR_FAN, "idle_outdoor_fan", DEFAULT_IDLE_OUTDOOR_FAN, 0.0, 200.0, step=1.0, unit=UnitOfPower.WATT, icon="mdi:fan"),
     HaierNumberDef(OPT_IDLE_CRANKCASE, "idle_crankcase", DEFAULT_IDLE_CRANKCASE, 0.0, 200.0, step=1.0, unit=UnitOfPower.WATT, icon="mdi:radiator"),
 
-    # Sensor offset
+    # Sensor offsets
     HaierNumberDef(OPT_OUTDOOR_AIR_DT_OFFSET, "outdoor_air_dt_offset", DEFAULT_OUTDOOR_AIR_DT_OFFSET, -3.0, 3.0, step=0.05, unit=UnitOfTemperature.CELSIUS, icon="mdi:thermometer-alert"),
+    HaierNumberDef(OPT_OUTDOOR_T_OFFSET, "outdoor_temperature_offset", DEFAULT_OUTDOOR_T_OFFSET, -5.0, 5.0, step=0.1, unit=UnitOfTemperature.CELSIUS, icon="mdi:thermometer-plus", mode=NumberMode.BOX),
+
+    # Steady-state gate (shorten for short-cycling automations)
+    HaierNumberDef(OPT_STEADY_UPTIME_SEC, "steady_state_uptime_seconds", float(DEFAULT_STEADY_UPTIME_SEC), 60.0, 900.0, step=10.0, unit="s", icon="mdi:timer-cog-outline", mode=NumberMode.BOX),
 
     # Bypass factor
     HaierNumberDef(OPT_BYPASS_FACTOR, "bypass_factor", DEFAULT_BYPASS_FACTOR, 0.05, 0.30, step=0.01, icon="mdi:air-conditioner"),

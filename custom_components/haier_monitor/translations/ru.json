@@ -213,6 +213,15 @@
       "p_elec": {"name": "Электрическая мощность"},
       "q_outdoor_air": {"name": "Q_outdoor (через воздух)"},
       "q_indoor_total": {"name": "Полная теплоотдача в дом"},
+      "q_method": {
+        "name": "Метод расчёта Q",
+        "state": {
+          "indoor": "Энтальпия внутреннего испарителя",
+          "outdoor_air": "Энтальпия наружного воздуха",
+          "carnot": "Оценка по Carnot",
+          "none": "Недоступен"
+        }
+      },
       "q_sensible_total": {"name": "Q sensible (всего)"},
       "q_latent_total": {"name": "Q latent (всего)"},
       "shr": {"name": "SHR"},
@@ -286,6 +295,8 @@
       "idle_outdoor_fan": {"name": "Калибровка: idle outdoor fan"},
       "idle_crankcase": {"name": "Калибровка: crankcase heater (T<+5°C)"},
       "outdoor_air_dt_offset": {"name": "Калибровка: ΔT воздуха offset"},
+      "outdoor_temperature_offset": {"name": "Калибровка: уличная T offset"},
+      "steady_state_uptime_seconds": {"name": "Калибровка: порог steady-state (с)"},
       "bypass_factor": {"name": "Калибровка: bypass factor"},
       "indoor_airflow_nominal": {"name": "Калибровка: indoor airflow nominal"},
       "day_tariff": {"name": "Калибровка: дневной тариф"},

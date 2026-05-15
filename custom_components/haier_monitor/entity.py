@@ -35,7 +35,7 @@ class HaierMonitorEntity(CoordinatorEntity[HaierMonitorCoordinator]):
             name=entry.title or "Haier Monitor",
             manufacturer="Haier",
             model="2U50S2SM1FA-3 Multi-Split (Calculated)",
-            sw_version="1.1.0",
+            sw_version="1.2.0",
         )
 
     @property

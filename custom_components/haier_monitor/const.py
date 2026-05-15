@@ -52,16 +52,19 @@ OPT_BYPASS_FACTOR: Final = "bypass_factor"
 OPT_INDOOR_AIRFLOW_NOMINAL: Final = "indoor_airflow_nominal"
 OPT_DAY_TARIFF: Final = "day_tariff"
 OPT_NIGHT_TARIFF: Final = "night_tariff"
+OPT_OUTDOOR_T_OFFSET: Final = "outdoor_temperature_offset"
+OPT_STEADY_UPTIME_SEC: Final = "steady_state_uptime_seconds"
+OPT_Q_METHOD: Final = "q_method"
 
 # --- Calibration defaults ---
 # EEV scale matches paveldn/haier-esphome master: hon_climate.cpp publishes
-# expansion_valve_open_degree as raw/4095.0 (fraction 0.0..1.0). The unit label
-# is "%" but the value is NOT scaled to 0..100 — it's a normalized fraction.
-# Idle physical positions per Service Manual §7.1.5 are 5 steps cool / 80 heat
-# on a 500-step PMV; expressed as fraction 0..1 they correspond to ≈ 0.001 / 0.16.
-DEFAULT_EEV_MAX: Final = 1.0             # fraction of full open
-DEFAULT_EEV_IDLE_COOL: Final = 0.001     # ≈ 5/4095 — service manual §7.1.5
-DEFAULT_EEV_IDLE_HEAT: Final = 0.16      # ≈ 660/4095 — service manual §7.1.5
+# expansion_valve_open_degree as raw/4095.0 (fraction 0.0..1.0). Service Manual
+# §7.1.5 specifies a 500-pulse PMV, so the physical full-open value in the
+# published fraction is 500/4095 = 0.122. Idle positions (5 cool / 80 heat)
+# correspond to 0.0012 and 0.020 in the published units.
+DEFAULT_EEV_MAX: Final = 0.122           # = 500/4095, full-open of 500-pulse PMV
+DEFAULT_EEV_IDLE_COOL: Final = 0.0012    # = 5/4095 — service manual §7.1.5
+DEFAULT_EEV_IDLE_HEAT: Final = 0.020     # = 80/4095 — service manual §7.1.5
 DEFAULT_PIPE_LENGTH: Final = 5.0         # m, standard pre-charge length
 DEFAULT_ETA_CARNOT_COOL: Final = 0.40    # R32 ASHP typical
 DEFAULT_ETA_CARNOT_HEAT: Final = 0.45    # R32 ASHP typical
@@ -76,6 +79,18 @@ DEFAULT_DAY_TARIFF: Final = 8.11         # RUB/kWh, default Russian rate
 DEFAULT_NIGHT_TARIFF: Final = 3.49       # RUB/kWh
 DEFAULT_ROOM_CAPACITY: Final = 2500      # W, AS25 rated
 DEFAULT_CURRENCY: Final = "RUB"
+DEFAULT_OUTDOOR_T_OFFSET: Final = 0.0    # °C; some hOn outdoor units offset by +1..2K
+DEFAULT_STEADY_UPTIME_SEC: Final = 300   # 5 min, shortened to 180 for short-cycling setups
+DEFAULT_Q_METHOD: Final = "auto"         # auto | indoor | outdoor_air | carnot
+Q_METHOD_OPTIONS: Final = ("auto", "indoor", "outdoor_air", "carnot")
+
+# Sanity check thresholds for runtime sensor validation (hOn multi-split quirks)
+SENSOR_VALID_T_AIR_MAX: Final = 50.0     # °C — outdoor air-out above this is pipe-T, not air
+SENSOR_VALID_T_AIR_MIN: Final = -20.0    # °C — outdoor air-in below this is suction-T, not air
+SENSOR_VALID_AIR_DT_MAX: Final = 20.0    # K — |out_air − in_air| above this is non-physical
+SENSOR_VALID_AIR_OFFSET_MAX: Final = 25.0  # K — |air_T − ambient| above this is non-physical
+SENSOR_INVALID_CURRENT: Final = 51.1     # A — sticky protocol max
+SENSOR_REQUIRE_ACTIVE_POWER_W: Final = 30.0  # power must be >this while compressor on to be considered valid
 
 # --- Physical constants ---
 AIR_DENSITY: Final = 1.225               # kg/m³ at 15°C, 101.3 kPa
@@ -98,7 +113,11 @@ UPDATE_INTERVAL_SECONDS: Final = 30      # coordinator update interval
 ENERGY_UPDATE_INTERVAL_SECONDS: Final = 60  # for Riemann sum integration
 
 # --- Steady state thresholds ---
-STEADY_STATE_MIN_UPTIME_SECONDS: Final = 300   # 5 min
+STEADY_STATE_MIN_UPTIME_SECONDS: Final = 300   # 5 min, calibratable via OPT_STEADY_UPTIME_SEC
+
+# --- Defrost detection gating (1.2: tightened to eliminate false positives) ---
+DEFROST_MAX_OUTDOOR_T: Final = 5.0       # °C — defrost is physically impossible above this
+DEFROST_MIN_UPTIME_SEC: Final = 180      # require sustained heat-mode operation before considering
 
 # --- FDD persistence windows (seconds) ---
 FDD_OUTDOOR_COIL_DELAY: Final = 3600         # 1h

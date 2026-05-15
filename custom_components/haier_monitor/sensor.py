@@ -97,7 +97,20 @@ SENSOR_DEFS: list[HaierSensorDef] = [
         extra_attrs_fn=lambda d: {"source": d.get("p_elec_source")},
     ),
     HaierSensorDef("q_outdoor_air", "q_outdoor_air", "mdi:weather-windy", UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, decimals=0, enabled_by_default=False),
-    HaierSensorDef("q_indoor_total", "q_indoor_total", "mdi:home-thermometer", UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, decimals=0),
+    HaierSensorDef(
+        "q_indoor_total", "q_indoor_total", "mdi:home-thermometer",
+        UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, decimals=0,
+        extra_attrs_fn=lambda d: {
+            "method": d.get("q_method"),
+            "outdoor_air_sensors_valid": d.get("outdoor_air_sensors_valid"),
+        },
+    ),
+    HaierSensorDef(
+        "q_method", "q_method", "mdi:function-variant", None,
+        SensorDeviceClass.ENUM, None,
+        options=["indoor", "outdoor_air", "carnot", "none"],
+        enabled_by_default=False,
+    ),
     HaierSensorDef("q_sensible_total", "q_sensible_total", "mdi:water-circle", UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, decimals=0, enabled_by_default=False),
     HaierSensorDef("q_latent_total", "q_latent_total", "mdi:water-percent", UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, decimals=0, enabled_by_default=False),
     HaierSensorDef("shr", "shr", "mdi:water-circle", None, None, SensorStateClass.MEASUREMENT, decimals=2, enabled_by_default=False),
