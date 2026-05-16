@@ -199,7 +199,39 @@ Real degradation. Check (in order): (1) outdoor coil cleanness, (2) `Calibration
 Storage is at `.storage/haier_monitor.<entry_id>.energy`. If the file gets corrupted (unlikely), values restart from 0. To intentionally reset: stop HA, delete the file, start HA.
 
 **`health` says "starting" forever**
-Steady-state requires compressor uptime > 5 min AND no defrost. If your compressor cycles faster than 5 minutes, you'll never see steady state. This is by design — short cycles produce unreliable COP measurements.
+Steady-state requires compressor uptime > 5 min AND no defrost. If your compressor cycles faster than 5 minutes, you'll never see steady state. Since 1.2 the threshold is calibratable via `Calibration: steady-state uptime (s)` — drop to 180 s for short-cycling automations.
+
+## Known sensor quirks on multi-split hOn (2U50S2SM1FA-3 etc.)
+
+The `paveldn/haier-esphome` master publishes a fixed sensor set, but some fields don't carry what their name suggests on multi-split outdoor units. From field data collected on `2U50S2SM1FA-3`:
+
+| Sensor | Mono-split | Multi-split (this model) | Action |
+|---|---|---|---|
+| `expansion_valve_open_degree` | fraction 0..1 (physical max ≈ 0.122 on 500-pulse PMV) | same | works |
+| `outdoor_temperature` | OAT | OAT with ~1.5K systematic offset | use real outside sensor; `Calibration: outdoor T offset` can correct |
+| `outdoor_coil_temperature` | refrigerant coil T (works in cool & heat) | same | works |
+| `indoor_coil_temperature` | indoor coil T (cool: 5–15°C; heat: 40–55°C) | same | works |
+| `outdoor_in_air_temperature` | intake air | **refrigerant suction-line T** (range −29..+39°C) | leave empty in setup; runtime sanity check auto-rejects |
+| `outdoor_out_air_temperature` | exhaust air | **refrigerant discharge-line T** (range 20..74°C) | leave empty in setup; runtime sanity check auto-rejects |
+| `power` | actual watts | often **constant 0** | leave empty; model-based fallback used |
+| `compressor_current` | actual amps | often **stuck 51.1 A** (protocol max) | leave empty; runtime check ignores 51.1 |
+| `indoor_humidity` | actual % | constant 0 | use external humidity sensor (`sensor.<your_room>_humidity`) |
+| `defrost_status` (binary) | works | works | optional, takes precedence over heuristics |
+
+Since 1.2 the integration auto-rejects bad readings runtime, but for cleaner setup leave the empty fields above unlinked.
+
+## Q calculation methods (1.2+)
+
+The new `Q calculation method` sensor exposes which estimator is being used at any moment:
+
+| Method | When used | Accuracy |
+|---|---|---|
+| `indoor` | room temperature + indoor coil temperature both available | ±10–15% — primary, used by default |
+| `outdoor_air` | both `outdoor_in/out_air` linked AND their values pass the sanity check (real air, not pipe-T) | ±10% — secondary, rarely available on multi-split |
+| `carnot` | only coil temperatures available; bounded estimate `Q = η·COP_carnot·W_comp` | ±15–25% — last-resort fallback |
+| `none` | compressor not running / not in steady state / no data | — |
+
+The selection happens automatically (`Q method = auto` is the default). For diagnostic purposes you can force a specific method via the `Q method` option — but `auto` is recommended.
 
 ## Service manual references
 
@@ -209,6 +241,28 @@ Steady-state requires compressor uptime > 5 min AND no defrost. If your compress
 - Section 11.1-11.4 — performance curves (P_max, Q_max at 8 cooling × 7 heating reference points)
 
 ## Changelog
+
+### 1.2.0
+
+Centred on the Q-rewrite that brings reported EER/COP into the physical range on multi-split hOn units. Field data showed Q overestimated 6-13× because `outdoor_in/out_air_temperature` fields on these units actually publish refrigerant pipe temperatures, not air.
+
+- **Q rewrite — 3-method system** with automatic selection:
+  - **Indoor coil enthalpy** (new, primary): `Q = Σ ρ·Cp·V·|T_room − T_coil|·(1−BF)` across active indoor units. Uses sensors that work reliably on multi-split.
+  - **Outdoor air enthalpy** (legacy, fallback): activated only when `outdoor_in/out_air` pass sanity checks (`|out_air − ambient| < 25K`, `|ΔT| < 20K`, `out_air ≤ 50°C`, `in_air ≥ −20°C`). On most multi-split installs these checks reject the values and the indoor method is used.
+  - **Carnot estimate** (new, last fallback): `Q ≈ η·COP_carnot(T_coil_indoor, T_coil_outdoor)·W_comp` when air & room data unavailable. ±15–25%.
+  - New sensor `q_method` exposes which method is active; attribute on `q_indoor_total` shows `method` + `outdoor_air_sensors_valid`.
+- **False defrost suppression**: hard gate `T_outdoor < 5°C` + `compressor_uptime ≥ 3 min`. The previous defrost detector fired 391 times in a week of field data while real outdoor was 5-25°C (physically impossible). Indicators 2/3 (defrost-T sensor and air ΔT direction) were dropped because they correlate with indicator 1 due to ESPHome `#87` and because the air-ΔT is meaningless on multi-split.
+- **EEV defaults refined**: 1.1's `1.0 / 0.001 / 0.16` replaced with `0.122 / 0.0012 / 0.020` matching the physical 500-pulse PMV at the protocol's 4095 full-scale. Migration v2→v3 auto-upgrades.
+- **Runtime sensor sanity**:
+  - `native_power` rejected when reported `< 30 W` while compressor running (handles the all-zero multi-split case).
+  - `compressor_current` rejected when stuck at protocol-max 51.1 A.
+  - `outdoor_in/out_air` rejected when physical bounds violated; `approach_outdoor` falls back to ambient instead of the corrupted in_air.
+- **New calibration sensors**:
+  - `Calibration: outdoor T offset` (±5K) for systematic hOn outdoor_temperature bias.
+  - `Calibration: steady-state uptime (s)` (60–900) for short-cycling automations.
+- **Config flow**: `outdoor_in_air_temperature` / `outdoor_out_air_temperature` are now Optional (were Required). Users on multi-split should leave them empty.
+- **Schema migration v3** with backwards-compatible storage migration of `q_kitchen`/`q_bedroom` → `q_room1`/`q_room2` retained from 1.1.
+- **README**: added "Known sensor quirks on multi-split hOn" table and "Q calculation methods" section.
 
 ### 1.1.0
 - **EEV scale fix (critical):** defaults aligned with `paveldn/haier-esphome` master, which publishes `expansion_valve_open_degree` as a fraction `0.0..1.0` (raw/4095). Previous defaults assumed "raw steps" and broke per-room `q_room` distribution and the EEV indicator of refrigerant FDD on most installations. Number-entity bounds widened to allow fraction calibration. Auto-migration (config entry v1 → v2) resets EEV calibration to the new defaults if the legacy default triple `500/5/80` is detected.

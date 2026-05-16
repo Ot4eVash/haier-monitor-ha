@@ -135,7 +135,7 @@ def _build_room_dict(user_input: dict) -> dict:
 class HaierMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
     """Configure Haier Multi-Split Monitor (fixed two indoor units)."""
 
-    VERSION = 2
+    VERSION = 3
 
     def __init__(self) -> None:
         self._name: str = "Haier Monitor"
@@ -224,8 +224,12 @@ class HaierMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_OUTDOOR_TEMP): _temp_selector(multiple=True),
                     vol.Required(CONF_OUTDOOR_COIL_TEMP): _temp_selector(multiple=True),
                     vol.Optional(CONF_OUTDOOR_DEFROST_TEMP): _temp_selector(multiple=True),
-                    vol.Required(CONF_OUTDOOR_IN_AIR_TEMP): _temp_selector(multiple=True),
-                    vol.Required(CONF_OUTDOOR_OUT_AIR_TEMP): _temp_selector(multiple=True),
+                    # 1.2: air-in/out sensors are now Optional. On multi-split hOn
+                    # they publish refrigerant-pipe temperatures (not air) and
+                    # leaving them empty allows the indoor coil enthalpy method
+                    # to be used instead.
+                    vol.Optional(CONF_OUTDOOR_IN_AIR_TEMP): _temp_selector(multiple=True),
+                    vol.Optional(CONF_OUTDOOR_OUT_AIR_TEMP): _temp_selector(multiple=True),
                     vol.Required(CONF_COMPRESSOR_FREQUENCY): _frequency_selector(),
                     vol.Required(CONF_COMPRESSOR_STATUS): _binary_selector(multiple=True),
                     vol.Optional(CONF_NATIVE_POWER): _entity_selector(
@@ -294,11 +298,11 @@ class HaierMonitorOptionsFlow(OptionsFlow):
                         CONF_OUTDOOR_DEFROST_TEMP,
                         default=current.get(CONF_OUTDOOR_DEFROST_TEMP, []),
                     ): _temp_selector(multiple=True),
-                    vol.Required(
+                    vol.Optional(
                         CONF_OUTDOOR_IN_AIR_TEMP,
                         default=current.get(CONF_OUTDOOR_IN_AIR_TEMP, []),
                     ): _temp_selector(multiple=True),
-                    vol.Required(
+                    vol.Optional(
                         CONF_OUTDOOR_OUT_AIR_TEMP,
                         default=current.get(CONF_OUTDOOR_OUT_AIR_TEMP, []),
                     ): _temp_selector(multiple=True),

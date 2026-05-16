@@ -108,27 +108,23 @@ def q_outdoor_air(
 
 
 # ---------------------------------------------------------------------------
-# Q_indoor — energy balance + pipe loss correction
+# Q_indoor — three-method estimator with sanity-based selection
 # ---------------------------------------------------------------------------
-def q_indoor_total(
+def q_indoor_outdoor_air(
     q_outdoor: float,
     p_elec: float,
     p_idle: float,
     mode: str,
     pipe_length: float,
-    in_defrost: bool,
-    steady_state: bool,
 ) -> float:
-    """Heat delivered to / removed from rooms (W).
+    """Method 2 — outdoor air enthalpy balance (Yu et al. 2023, ±8%).
 
     Cool: Q_indoor = (Q_outdoor − W_comp) × (1 − k_pipe_cool)
     Heat: Q_indoor = (|Q_outdoor| + W_comp) × (1 − k_pipe_heat)
-    where W_comp = P_elec − P_idle and k_pipe = 0.005×L (cool) / 0.01×L (heat).
 
-    Returns 0 during defrost or non-steady-state (forced gating).
+    Caller must verify the outdoor air sensors actually report air (not
+    refrigerant pipe temperatures, as happens on hOn multi-split units).
     """
-    if in_defrost or not steady_state:
-        return 0.0
     w_comp = max(0.0, p_elec - p_idle)
     if mode in ACTIVE_COOL_MODES:
         k_pipe = 0.005 * pipe_length
@@ -137,6 +133,181 @@ def q_indoor_total(
         k_pipe = 0.01 * pipe_length
         return max(0.0, (abs(q_outdoor) + w_comp) * (1.0 - k_pipe))
     return 0.0
+
+
+def q_indoor_from_rooms(
+    rooms: list[dict],
+    indoor_airflow_m3h: float,
+    bypass_factor: float,
+    mode: str,
+) -> float:
+    """Method 1 — indoor coil enthalpy summation across active rooms (PRIMARY).
+
+    For each running indoor unit with a valid coil temperature and room
+    temperature, accumulates the sensible heat flow through the coil:
+        Q_room = ρ·Cp·V·|T_room − T_coil|·(1 − BF)
+    Returns total across rooms in watts. Robust on multi-split hOn where
+    outdoor air sensors are unreliable, since indoor coil temperatures and
+    room temperatures come from independent reliable sources.
+    """
+    if mode not in ACTIVE_COOL_MODES and mode != MODE_HEAT:
+        return 0.0
+    total = 0.0
+    for r in rooms:
+        if not r.get("fan_running"):
+            continue
+        t_room = r.get("t_room")
+        t_coil = r.get("t_indoor_coil")
+        if t_room is None or t_coil is None:
+            continue
+        if mode in ACTIVE_COOL_MODES:
+            delta_t = max(0.0, t_room - t_coil)
+        else:
+            delta_t = max(0.0, t_coil - t_room)
+        total += AIR_VOLUMETRIC_FACTOR * indoor_airflow_m3h * delta_t * (1 - bypass_factor)
+    return total
+
+
+def q_indoor_carnot(
+    p_elec: float,
+    p_idle: float,
+    t_indoor_coil: Optional[float],
+    t_outdoor_coil: Optional[float],
+    eta_carnot: float,
+    mode: str,
+) -> float:
+    """Method 3 — Carnot-cycle bound (fallback when air & room data unreliable).
+
+    Q = η·COP_carnot·W_comp where COP_carnot uses coil temperatures:
+        Cool: COP = T_evap / (T_cond − T_evap),  T_evap = indoor coil
+        Heat: COP = T_cond / (T_cond − T_evap),  T_cond = indoor coil
+    Returns watts.
+    """
+    if t_indoor_coil is None or t_outdoor_coil is None:
+        return 0.0
+    w_comp = max(0.0, p_elec - p_idle)
+    if w_comp < 30:
+        return 0.0
+    t_i_k = t_indoor_coil + 273.15
+    t_o_k = t_outdoor_coil + 273.15
+    if mode in ACTIVE_COOL_MODES:
+        # Outdoor coil hot, indoor coil cold
+        delta = t_o_k - t_i_k
+        if delta < 1:
+            return 0.0
+        cop = eta_carnot * t_i_k / delta
+    elif mode == MODE_HEAT:
+        # Indoor coil hot, outdoor coil cold
+        delta = t_i_k - t_o_k
+        if delta < 1:
+            return 0.0
+        cop = eta_carnot * t_i_k / delta
+    else:
+        return 0.0
+    return max(0.0, w_comp * cop)
+
+
+def outdoor_air_sensors_valid(
+    t_in_air: Optional[float],
+    t_out_air: Optional[float],
+    t_outdoor: Optional[float],
+    air_dt: Optional[float],
+    valid_t_air_max: float,
+    valid_t_air_min: float,
+    valid_air_dt_max: float,
+    valid_air_offset_max: float,
+) -> bool:
+    """Decide if the outdoor air-in/out pair carries real air temperatures.
+
+    Multi-split hOn outdoor units often publish these fields with
+    refrigerant-pipe temperatures instead of air — the values then differ
+    from the ambient outdoor temperature by tens of K and the air-side
+    energy balance overestimates Q by 5-15×. We reject the readings if any
+    of these physical bounds are violated.
+    """
+    if t_in_air is None or t_out_air is None or air_dt is None:
+        return False
+    if t_out_air > valid_t_air_max or t_in_air < valid_t_air_min:
+        return False
+    if abs(air_dt) > valid_air_dt_max:
+        return False
+    if t_outdoor is not None:
+        if abs(t_in_air - t_outdoor) > valid_air_offset_max:
+            return False
+        if abs(t_out_air - t_outdoor) > valid_air_offset_max:
+            return False
+    return True
+
+
+def q_indoor_total(
+    rooms: list[dict],
+    q_outdoor: float,
+    p_elec: float,
+    p_idle: float,
+    mode: str,
+    pipe_length: float,
+    in_defrost: bool,
+    steady_state: bool,
+    indoor_airflow_m3h: float,
+    bypass_factor: float,
+    t_indoor_coil_avg: Optional[float],
+    t_outdoor_coil: Optional[float],
+    eta_carnot: float,
+    method_preference: str,
+    outdoor_air_valid: bool,
+) -> tuple[float, str]:
+    """Compute Q_indoor with method selection.
+
+    Returns (q_watts, method_used). Method is one of:
+        'indoor'        — Method 1, indoor coil enthalpy (preferred)
+        'outdoor_air'   — Method 2, outdoor air enthalpy (legacy, requires
+                          sanity-validated outdoor air sensors)
+        'carnot'        — Method 3, Carnot-bounded estimate
+        'none'          — gated to 0 (defrost / non-steady / no data)
+
+    Preference:
+        'auto'          — try indoor → outdoor_air (if sane) → carnot
+        'indoor'        — only indoor; 0 if room data missing
+        'outdoor_air'   — only outdoor air; 0 if rejected by sanity check
+        'carnot'        — only carnot
+    """
+    if in_defrost or not steady_state:
+        return 0.0, "none"
+
+    def try_indoor() -> Optional[float]:
+        q = q_indoor_from_rooms(rooms, indoor_airflow_m3h, bypass_factor, mode)
+        return q if q > 50 else None
+
+    def try_outdoor_air() -> Optional[float]:
+        if not outdoor_air_valid:
+            return None
+        q = q_indoor_outdoor_air(q_outdoor, p_elec, p_idle, mode, pipe_length)
+        return q if q > 50 else None
+
+    def try_carnot() -> Optional[float]:
+        q = q_indoor_carnot(p_elec, p_idle, t_indoor_coil_avg, t_outdoor_coil, eta_carnot, mode)
+        return q if q > 50 else None
+
+    if method_preference == "indoor":
+        q = try_indoor()
+        return (q, "indoor") if q is not None else (0.0, "none")
+    if method_preference == "outdoor_air":
+        q = try_outdoor_air()
+        return (q, "outdoor_air") if q is not None else (0.0, "none")
+    if method_preference == "carnot":
+        q = try_carnot()
+        return (q, "carnot") if q is not None else (0.0, "none")
+    # 'auto'
+    q = try_indoor()
+    if q is not None:
+        return q, "indoor"
+    q = try_outdoor_air()
+    if q is not None:
+        return q, "outdoor_air"
+    q = try_carnot()
+    if q is not None:
+        return q, "carnot"
+    return 0.0, "none"
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +470,7 @@ def expected_cop_carnot(
 
 
 # ---------------------------------------------------------------------------
-# Defrost detection (multi-indicator voting)
+# Defrost detection — 1.2: hard gating to suppress false positives
 # ---------------------------------------------------------------------------
 def is_defrost(
     mode: str,
@@ -309,31 +480,52 @@ def is_defrost(
     t_defrost: Optional[float],
     delta_t_air: Optional[float],
     native_defrost_status: Optional[bool],
+    compressor_uptime_min: float,
+    max_outdoor_t: float,
+    min_uptime_sec: int,
+    outdoor_air_valid: bool,
 ) -> bool:
-    """Multi-indicator defrost detection.
+    """Detect a real defrost cycle, rejecting transient artifacts.
 
-    Native ESPHome defrost_status takes precedence (returns True immediately).
-    Otherwise: 2-of-3 voting between coil-hot, defrost-sensor-warm, reverse-flow.
+    Hard gates (any fail → False):
+      • mode must be heat
+      • compressor must be running for at least `min_uptime_sec`
+      • outdoor air temperature must be below `max_outdoor_t` (defrost is
+        physically impossible above ~5°C)
+
+    Decision (after gates pass):
+      • Native ESPHome defrost_status, if configured, is authoritative.
+      • Otherwise: outdoor coil must be ABOVE outdoor air by ≥5K (the
+        reverse-cycle heating signature). The previous indicators based
+        on a separate defrost-T sensor and air-ΔT direction are dropped
+        because:
+          – ESPHome paveldn/haier-esphome#87 makes outdoor_defrost_temperature
+            mirror outdoor_coil_temperature, so it adds no independent info;
+          – outdoor air ΔT is meaningless on multi-split where those fields
+            carry refrigerant pipe temperatures (`outdoor_air_valid=False`).
     """
-    if not compressor_running or mode != MODE_HEAT:
+    if mode != MODE_HEAT or not compressor_running:
+        return False
+    if compressor_uptime_min * 60 < min_uptime_sec:
+        return False
+    if t_outdoor is None or t_outdoor >= max_outdoor_t:
         return False
     if native_defrost_status is True:
         return True
-    if t_outdoor is None or t_outdoor_coil is None:
+    if native_defrost_status is False:
+        # Explicit native value False — trust it over heuristics
         return False
-
-    indicators = 0
-    # Indicator 1: outdoor coil hotter than outdoor air by 5°C+ in cold weather
-    if t_outdoor < 8 and t_outdoor_coil > (t_outdoor + 5):
-        indicators += 1
-    # Indicator 2: defrost sensor warm (heater pulled coil up)
-    if t_defrost is not None and t_defrost > 7:
-        indicators += 1
-    # Indicator 3: reverse heat flow (heat normally has Q_outdoor<0; positive ΔT → reversal)
-    if delta_t_air is not None and delta_t_air > 0.5:
-        indicators += 1
-
-    return indicators >= 2
+    if t_outdoor_coil is None:
+        return False
+    # Coil markedly warmer than outdoor air (reverse-cycle signature)
+    if t_outdoor_coil > t_outdoor + 5:
+        # Optional confirmation by air ΔT only if the air sensors are
+        # validated as real air (not pipe-T on multi-split)
+        if outdoor_air_valid and delta_t_air is not None and delta_t_air > 0.5:
+            return True
+        # Without independent confirmation require larger margin to fire
+        return t_outdoor_coil > t_outdoor + 10
+    return False
 
 
 # ---------------------------------------------------------------------------

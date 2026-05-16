@@ -71,7 +71,12 @@ from .const import (
     DEFAULT_INDOOR_AIRFLOW_NOMINAL,
     DEFAULT_NIGHT_TARIFF,
     DEFAULT_OUTDOOR_AIR_DT_OFFSET,
+    DEFAULT_OUTDOOR_T_OFFSET,
     DEFAULT_PIPE_LENGTH,
+    DEFAULT_Q_METHOD,
+    DEFAULT_STEADY_UPTIME_SEC,
+    DEFROST_MAX_OUTDOOR_T,
+    DEFROST_MIN_UPTIME_SEC,
     DOMAIN,
     EFFICIENCY_AVERAGE,
     EFFICIENCY_EXCELLENT,
@@ -118,7 +123,10 @@ from .const import (
     OPT_INDOOR_AIRFLOW_NOMINAL,
     OPT_NIGHT_TARIFF,
     OPT_OUTDOOR_AIR_DT_OFFSET,
+    OPT_OUTDOOR_T_OFFSET,
     OPT_PIPE_LENGTH,
+    OPT_Q_METHOD,
+    OPT_STEADY_UPTIME_SEC,
     OUTDOOR_CLEAN_REMINDER_DAYS,
     SANITY_EXCELLENT_HIGH,
     SANITY_EXCELLENT_LOW,
@@ -130,6 +138,12 @@ from .const import (
     SCOP_RATED,
     SEER_CLASS_BOUNDARIES,
     SEER_RATED,
+    SENSOR_INVALID_CURRENT,
+    SENSOR_REQUIRE_ACTIVE_POWER_W,
+    SENSOR_VALID_AIR_DT_MAX,
+    SENSOR_VALID_AIR_OFFSET_MAX,
+    SENSOR_VALID_T_AIR_MAX,
+    SENSOR_VALID_T_AIR_MIN,
     SEVERITY_FAULT,
     SEVERITY_INFO,
     SEVERITY_OK,
@@ -550,13 +564,39 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
                 return True
         return False
 
-    def _native_power(self, sources: list[str]) -> Optional[float]:
-        """Take max of native ESPHome power sensors (compressor on each side)."""
+    def _native_power(
+        self, sources: list[str], compressor_running: bool
+    ) -> Optional[float]:
+        """Take max of native ESPHome power sensors, with runtime sanity.
+
+        hOn multi-split outdoor units publish power=0 even while the
+        compressor is on (paveldn/haier-esphome#19). Reject those readings
+        so the model-based fallback can be used instead.
+        """
         vals = []
         for src in sources:
             v = safe_float(self.hass.states.get(src))
             if v is not None and v > 0:
                 vals.append(v)
+        if not vals:
+            return None
+        best = max(vals)
+        if compressor_running and best < SENSOR_REQUIRE_ACTIVE_POWER_W:
+            return None
+        return best
+
+    def _native_compressor_current(self, sources: list[str]) -> Optional[float]:
+        """Max of native compressor-current sensors, rejecting the sticky
+        protocol max value (51.1 A) that hOn multi-split units report
+        constantly when they don't actually populate the field."""
+        vals = []
+        for src in sources:
+            v = safe_float(self.hass.states.get(src))
+            if v is None:
+                continue
+            if abs(v - SENSOR_INVALID_CURRENT) < 0.01:
+                continue
+            vals.append(v)
         if not vals:
             return None
         return max(vals)
@@ -592,8 +632,12 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
 
         # ------ Layer 0: raw aggregates ------
         outdoor_temp_sources = cfg.get(CONF_OUTDOOR_TEMP_SOURCES, {})
-        t_outdoor = self._agg_outdoor_temp(
+        t_outdoor_raw = self._agg_outdoor_temp(
             outdoor_temp_sources.get(CONF_OUTDOOR_TEMP, [])
+        )
+        outdoor_t_offset = self._opt(OPT_OUTDOOR_T_OFFSET, DEFAULT_OUTDOOR_T_OFFSET)
+        t_outdoor = (
+            t_outdoor_raw + outdoor_t_offset if t_outdoor_raw is not None else None
         )
         t_outdoor_coil = self._agg_outdoor_temp(
             outdoor_temp_sources.get(CONF_OUTDOOR_COIL_TEMP, [])
@@ -628,11 +672,12 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
         data["compressor_frequency"] = f_comp
         data["compressor_running"] = compressor_running
 
-        # Native sensors
+        # Native sensors (with runtime validity checks for hOn multi-split quirks)
         native_power = self._native_power(
-            outdoor_temp_sources.get(CONF_NATIVE_POWER, [])
+            outdoor_temp_sources.get(CONF_NATIVE_POWER, []),
+            compressor_running,
         )
-        native_compressor_current = self._max_present(
+        native_compressor_current = self._native_compressor_current(
             outdoor_temp_sources.get(CONF_NATIVE_COMPRESSOR_CURRENT, [])
         )
         native_outdoor_fan = self._native_defrost(
@@ -701,6 +746,23 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
         self._cycling_tracker.update(compressor_running, now)
         data["compressor_starts_per_hour"] = self._cycling_tracker.starts_per_hour()
 
+        # Outdoor-air sensor sanity (multi-split hOn quirks).
+        # On 2U50S2SM1FA-3 and similar, `outdoor_in/out_air_temperature`
+        # fields actually publish refrigerant pipe temperatures, not air —
+        # using them in the air enthalpy balance overestimates Q by 5-15×.
+        # We validate against physical bounds and fall back to other methods.
+        outdoor_air_valid = ph.outdoor_air_sensors_valid(
+            t_in_air=t_outdoor_in_air,
+            t_out_air=t_outdoor_out_air,
+            t_outdoor=t_outdoor,
+            air_dt=outdoor_air_dt,
+            valid_t_air_max=SENSOR_VALID_T_AIR_MAX,
+            valid_t_air_min=SENSOR_VALID_T_AIR_MIN,
+            valid_air_dt_max=SENSOR_VALID_AIR_DT_MAX,
+            valid_air_offset_max=SENSOR_VALID_AIR_OFFSET_MAX,
+        )
+        data["outdoor_air_sensors_valid"] = outdoor_air_valid
+
         # Defrost detection (must run before outdoor_fan fallback —
         # during defrost the outdoor fan is OFF even though compressor is ON,
         # so the proxy must subtract this case to avoid double-counting fan idle power).
@@ -712,6 +774,10 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
             t_defrost=t_outdoor_defrost,
             delta_t_air=outdoor_air_dt,
             native_defrost_status=native_defrost,
+            compressor_uptime_min=compressor_uptime_min,
+            max_outdoor_t=DEFROST_MAX_OUTDOOR_T,
+            min_uptime_sec=DEFROST_MIN_UPTIME_SEC,
+            outdoor_air_valid=outdoor_air_valid,
         )
         data["in_defrost"] = in_defrost
         self._defrost_history.update(in_defrost, now)
@@ -725,11 +791,12 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
             outdoor_fan_running = compressor_running and not in_defrost
         data["outdoor_fan_running"] = outdoor_fan_running
 
-        # Steady state
+        # Steady state (uptime gate is calibratable via OPT_STEADY_UPTIME_SEC)
+        steady_uptime_sec = self._opt(OPT_STEADY_UPTIME_SEC, DEFAULT_STEADY_UPTIME_SEC)
         steady_state = (
             compressor_running
             and not in_defrost
-            and compressor_uptime_min * 60 > STEADY_STATE_MIN_UPTIME_SECONDS
+            and compressor_uptime_min * 60 > steady_uptime_sec
         )
         data["steady_state"] = steady_state
 
@@ -790,7 +857,24 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
             if outdoor_air_dt is not None
             else 0.0
         )
-        q_indoor = ph.q_indoor_total(
+
+        # Indoor coil + room averages for Method 3 (Carnot fallback)
+        coil_temps = [r["t_indoor_coil"] for r in rooms_data.values() if r["t_indoor_coil"] is not None]
+        t_indoor_coil_avg = sum(coil_temps) / len(coil_temps) if coil_temps else None
+        eta_carnot = (
+            self._opt(OPT_ETA_CARNOT_COOL, DEFAULT_ETA_CARNOT_COOL)
+            if mode in ACTIVE_COOL_MODES
+            else self._opt(OPT_ETA_CARNOT_HEAT, DEFAULT_ETA_CARNOT_HEAT)
+        )
+
+        # Calibration values used by Q methods and per-room blocks
+        bypass = self._opt(OPT_BYPASS_FACTOR, DEFAULT_BYPASS_FACTOR)
+        indoor_airflow = self._opt(
+            OPT_INDOOR_AIRFLOW_NOMINAL, DEFAULT_INDOOR_AIRFLOW_NOMINAL
+        )
+        q_method_pref = self._opt(OPT_Q_METHOD, DEFAULT_Q_METHOD)
+        q_indoor, q_method_used = ph.q_indoor_total(
+            rooms=list(rooms_data.values()),
             q_outdoor=q_outdoor,
             p_elec=p_elec,
             p_idle=p_idle,
@@ -798,15 +882,19 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
             pipe_length=self._opt(OPT_PIPE_LENGTH, DEFAULT_PIPE_LENGTH),
             in_defrost=in_defrost,
             steady_state=steady_state,
+            indoor_airflow_m3h=indoor_airflow,
+            bypass_factor=bypass,
+            t_indoor_coil_avg=t_indoor_coil_avg,
+            t_outdoor_coil=t_outdoor_coil,
+            eta_carnot=eta_carnot,
+            method_preference=q_method_pref,
+            outdoor_air_valid=outdoor_air_valid,
         )
         data["q_outdoor_air"] = q_outdoor
         data["q_indoor_total"] = q_indoor
+        data["q_method"] = q_method_used
 
         # ------ Per-room: dewpoint, condensation, sensible, share ------
-        bypass = self._opt(OPT_BYPASS_FACTOR, DEFAULT_BYPASS_FACTOR)
-        indoor_airflow = self._opt(
-            OPT_INDOOR_AIRFLOW_NOMINAL, DEFAULT_INDOOR_AIRFLOW_NOMINAL
-        )
         eev_idle = (
             self._opt(OPT_EEV_IDLE_COOL, DEFAULT_EEV_IDLE_COOL)
             if mode in ACTIVE_COOL_MODES
@@ -861,8 +949,12 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
         data["q_latent_total"] = q_latent_total
         data["shr"] = shr
 
-        # Approach outdoor
-        approach_outdoor = ph.approach_outdoor(t_outdoor_coil, t_outdoor_in_air, mode)
+        # Approach outdoor — use ambient (`t_outdoor`) instead of t_outdoor_in_air,
+        # which on multi-split hOn carries refrigerant pipe temperature rather
+        # than intake air. Falling back to in_air only when the air sensors
+        # passed the sanity validation.
+        approach_air_ref = t_outdoor if not outdoor_air_valid else t_outdoor_in_air
+        approach_outdoor = ph.approach_outdoor(t_outdoor_coil, approach_air_ref, mode)
         data["approach_outdoor"] = approach_outdoor
         if approach_outdoor is not None and steady_state:
             self._smooth_approach_outdoor.push(approach_outdoor, now)
@@ -893,13 +985,9 @@ class HaierMonitorCoordinator(DataUpdateCoordinator):
         data["eer_expected"] = eer_expected
         data["cop_expected"] = cop_expected
 
-        # Carnot derived
+        # Carnot derived (reuses precomputed t_indoor_coil_avg and eta_carnot)
         data["cop_carnot"] = ph.expected_cop_carnot(
-            t_outdoor_coil,
-            sum((r["t_indoor_coil"] for r in rooms_data.values() if r["t_indoor_coil"] is not None), 0.0)
-            / max(1, sum(1 for r in rooms_data.values() if r["t_indoor_coil"] is not None)) if any(r["t_indoor_coil"] is not None for r in rooms_data.values()) else None,
-            self._opt(OPT_ETA_CARNOT_COOL, DEFAULT_ETA_CARNOT_COOL) if mode in ACTIVE_COOL_MODES else self._opt(OPT_ETA_CARNOT_HEAT, DEFAULT_ETA_CARNOT_HEAT),
-            mode,
+            t_outdoor_coil, t_indoor_coil_avg, eta_carnot, mode,
         )
 
         # Efficiency ratios
